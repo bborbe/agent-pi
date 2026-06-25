@@ -13,8 +13,8 @@ import (
 	"context"
 	"os"
 
-	agentlib "github.com/bborbe/agent/lib"
-	"github.com/bborbe/agent/lib/envparse"
+	agentlib "github.com/bborbe/agent"
+	"github.com/bborbe/agent/envparse"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libsentry "github.com/bborbe/sentry"

@@ -6,10 +6,10 @@
 package factory
 
 import (
-	agentlib "github.com/bborbe/agent/lib"
-	delivery "github.com/bborbe/agent/lib/delivery"
-	healthcheck "github.com/bborbe/agent/lib/healthcheck"
-	pilib "github.com/bborbe/agent/lib/pi"
+	agentlib "github.com/bborbe/agent"
+	delivery "github.com/bborbe/agent/delivery"
+	healthcheck "github.com/bborbe/agent/healthcheck"
+	pilib "github.com/bborbe/agent/pi"
 	"github.com/bborbe/cqrs/base"
 	libkafka "github.com/bborbe/kafka"
 	libtime "github.com/bborbe/time"
