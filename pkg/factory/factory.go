@@ -6,15 +6,15 @@
 package factory
 
 import (
+	agentlib "github.com/bborbe/agent/lib"
+	delivery "github.com/bborbe/agent/lib/delivery"
+	healthcheck "github.com/bborbe/agent/lib/healthcheck"
+	pilib "github.com/bborbe/agent/lib/pi"
 	"github.com/bborbe/cqrs/base"
 	libkafka "github.com/bborbe/kafka"
 	libtime "github.com/bborbe/time"
 
 	"github.com/bborbe/agent-pi/pkg/prompts"
-	agentlib "github.com/bborbe/agent/lib"
-	delivery "github.com/bborbe/agent/lib/delivery"
-	healthcheck "github.com/bborbe/agent/lib/healthcheck"
-	pilib "github.com/bborbe/agent/lib/pi"
 )
 
 // ServiceName is the canonical service name for the agent-pi binary.

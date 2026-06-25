@@ -15,6 +15,10 @@ import (
 	"os"
 	"time"
 
+	agentlib "github.com/bborbe/agent/lib"
+	delivery "github.com/bborbe/agent/lib/delivery"
+	"github.com/bborbe/agent/lib/envparse"
+	libmetrics "github.com/bborbe/agent/lib/metrics"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libkafka "github.com/bborbe/kafka"
@@ -27,10 +31,6 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/bborbe/agent-pi/pkg/factory"
-	agentlib "github.com/bborbe/agent/lib"
-	delivery "github.com/bborbe/agent/lib/delivery"
-	"github.com/bborbe/agent/lib/envparse"
-	libmetrics "github.com/bborbe/agent/lib/metrics"
 )
 
 const agentName = "pi-agent"

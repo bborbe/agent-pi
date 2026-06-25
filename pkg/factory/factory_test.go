@@ -7,11 +7,11 @@ package factory_test
 import (
 	"context"
 
+	agentlib "github.com/bborbe/agent/lib"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 
 	"github.com/bborbe/agent-pi/pkg/factory"
-	agentlib "github.com/bborbe/agent/lib"
 )
 
 var _ = Describe("CreateAgentProvider", func() {
