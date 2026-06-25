@@ -1,5 +1,5 @@
-include ../../../../Makefile.variables
-include ../../../../common.env
+include ../../Makefile.variables
+include ../../common.env
 
 TASK_FILE ?= dummy-task.md
 BRANCH := dev
@@ -35,3 +35,9 @@ run-dummy-task: $(TASK_FILE)
 		-allowed-tools=$(ALLOWED_TOOLS) \
 		-provider-api-key='$(PROVIDER_API_KEY)' \
 		-v=2
+
+# No-op so the recursive `apply` sweep from the parent Makefile.docker doesn't
+# choke on this directory.
+.PHONY: apply
+apply:
+	@echo "skip apply for run-task (local CLI, not deployed)"
