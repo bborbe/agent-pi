@@ -10,7 +10,7 @@ import (
 	libkafka "github.com/bborbe/kafka"
 	libtime "github.com/bborbe/time"
 
-	"github.com/bborbe/agent/agent/pi/pkg/prompts"
+	"github.com/bborbe/agent-pi/pkg/prompts"
 	agentlib "github.com/bborbe/agent/lib"
 	delivery "github.com/bborbe/agent/lib/delivery"
 	healthcheck "github.com/bborbe/agent/lib/healthcheck"

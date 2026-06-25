@@ -26,7 +26,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
 
-	"github.com/bborbe/agent/agent/pi/pkg/factory"
+	"github.com/bborbe/agent-pi/pkg/factory"
 	agentlib "github.com/bborbe/agent/lib"
 	delivery "github.com/bborbe/agent/lib/delivery"
 	"github.com/bborbe/agent/lib/envparse"

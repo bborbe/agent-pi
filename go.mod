@@ -1,13 +1,9 @@
-module github.com/bborbe/agent/agent/pi
+module github.com/bborbe/agent-pi
 
 go 1.26.4
 
-replace (
-	github.com/bborbe/agent/lib => ../../lib
-)
-
 require (
-	github.com/bborbe/agent/lib v0.63.11
+	github.com/bborbe/agent/lib v0.68.0
 	github.com/bborbe/cqrs v0.5.2
 	github.com/bborbe/errors v1.5.13
 	github.com/bborbe/kafka v1.23.1
@@ -114,6 +110,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-exclude (
-	cloud.google.com/go v0.26.0
-)
+exclude cloud.google.com/go v0.26.0
