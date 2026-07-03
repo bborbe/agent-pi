@@ -63,7 +63,10 @@ type application struct {
 	Model string `required:"false" arg:"model" env:"MODEL" usage:"Model name" default:"MiniMax-M2.7-highspeed"`
 
 	// Branch for Kafka result delivery.
-	Branch base.Branch `required:"true" arg:"branch" env:"BRANCH" usage:"branch"`
+	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
+
+	// TopicPrefix selects the Kafka topic prefix for result delivery.
+	TopicPrefix base.TopicPrefix `required:"false" arg:"topic-prefix" env:"TOPIC_PREFIX" usage:"Explicit Kafka topic prefix; empty means unprefixed topics"`
 
 	// Phase to run (framework requires explicit phase).
 	Phase domain.TaskPhase `required:"false" arg:"phase" env:"PHASE" usage:"Agent phase: planning | execution | ai_review" default:"execution"`
@@ -117,7 +120,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 			}
 		}()
 		deliverer = factory.CreateKafkaResultDeliverer(
-			syncProducer, a.Branch, a.TaskID, a.TaskContent,
+			syncProducer, a.TopicPrefix, a.TaskID, a.TaskContent,
 			libtime.NewCurrentDateTime(),
 		)
 	}
