@@ -63,7 +63,7 @@ type application struct {
 	Model string `required:"false" arg:"model" env:"MODEL" usage:"Model name" default:"MiniMax-M2.7-highspeed"`
 
 	// Branch for Kafka result delivery.
-	Branch base.Branch `required:"true" arg:"branch" env:"BRANCH" usage:"branch"`
+	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
 	// TopicPrefix selects the Kafka topic prefix for result delivery.
 	TopicPrefix base.TopicPrefix `required:"false" arg:"topic-prefix" env:"TOPIC_PREFIX" usage:"Explicit Kafka topic prefix; empty means unprefixed topics"`
