@@ -46,14 +46,14 @@ func CreateFileResultDeliverer(filePath string) agentlib.ResultDeliverer {
 // CreateKafkaResultDeliverer creates a ResultDeliverer that publishes task updates to Kafka.
 func CreateKafkaResultDeliverer(
 	syncProducer libkafka.SyncProducer,
-	branch base.Branch,
+	topicPrefix base.TopicPrefix,
 	taskID agentlib.TaskIdentifier,
 	originalContent string,
 	currentDateTime libtime.CurrentDateTimeGetter,
 ) agentlib.ResultDeliverer {
 	return delivery.NewKafkaResultDeliverer(
 		syncProducer,
-		branch,
+		topicPrefix,
 		taskID,
 		originalContent,
 		delivery.NewPassthroughContentGenerator(),
