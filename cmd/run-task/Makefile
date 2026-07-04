@@ -1,5 +1,4 @@
 include ../../Makefile.variables
-include ../../common.env
 
 TASK_FILE ?= dummy-task.md
 BRANCH := dev
