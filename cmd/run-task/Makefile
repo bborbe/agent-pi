@@ -1,7 +1,7 @@
 include ../../Makefile.variables
-include ../../common.env
 
 TASK_FILE ?= dummy-task.md
+# Hardcoded local-dev default for this dummy-task runner (not from Makefile.variables).
 BRANCH := dev
 AGENT_DIR ?= $(shell cd ../.. && pwd)/agent
 ALLOWED_TOOLS ?= Grep,Read

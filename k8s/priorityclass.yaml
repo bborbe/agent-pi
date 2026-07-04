@@ -1,8 +1,0 @@
-apiVersion: scheduling.k8s.io/v1
-kind: PriorityClass
-metadata:
-  name: agent-pi
-value: 500
-globalDefault: false
-preemptionPolicy: Never
-description: "Agent pi — namespace-local concurrency via matching ResourceQuota. Never preempts."
