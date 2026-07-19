@@ -1,0 +1,16 @@
+
+[[IgnoredVulns]]
+id = "GO-2026-5932"
+reason = "no-fix advisory — unmaintained/deprecated package"
+
+[[IgnoredVulns]]
+id = "GO-2026-5064"
+reason = "no-fix on containerd v1 (only v2 patched); CRI checkpoint-restore unreachable — indirect dep"
+
+[[IgnoredVulns]]
+id = "GO-2026-5338"
+reason = "no-fix on containerd v1 (only v2 patched); CRI checkpoint-restore unreachable — indirect dep"
+
+[[IgnoredVulns]]
+id = "GO-2026-5622"
+reason = "no-fix on containerd v1 (only v2 patched); CRI checkpoint-restore unreachable — indirect dep"
