@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## Unreleased
+## v0.1.2
 
 - chore: bump Go 1.26.4 → 1.26.5, alpine 3.23 → 3.24, and bborbe deps (agent v0.72.0 → v0.77.1, vault-cli v0.68.0 → v0.101.1, cqrs, kafka, service, time, sentry, errors)
 - security: exclude no-fix advisory GO-2026-5932 (golang.org/x/crypto/openpgp unmaintained) via VULNCHECK_IGNORE + .trivyignore + .osv-scanner.toml
