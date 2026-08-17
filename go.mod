@@ -6,11 +6,11 @@ require (
 	github.com/bborbe/agent v0.81.1
 	github.com/bborbe/cqrs v0.6.6
 	github.com/bborbe/errors v1.5.17
-	github.com/bborbe/kafka v1.25.8
+	github.com/bborbe/kafka v1.25.7
 	github.com/bborbe/sentry v1.9.24
-	github.com/bborbe/service v1.10.8
+	github.com/bborbe/service v1.10.7
 	github.com/bborbe/time v1.27.8
-	github.com/bborbe/vault-cli v0.111.4
+	github.com/bborbe/vault-cli v0.109.1
 	github.com/golang/glog v1.2.5
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.42.1
@@ -25,13 +25,13 @@ require (
 	github.com/bborbe/http v1.26.20 // indirect
 	github.com/bborbe/k8s v1.14.9 // indirect
 	github.com/bborbe/kv v1.21.9 // indirect
-	github.com/bborbe/log v1.6.22 // indirect
+	github.com/bborbe/log v1.6.21 // indirect
 	github.com/bborbe/math v1.3.18 // indirect
-	github.com/bborbe/metrics v0.5.12 // indirect
+	github.com/bborbe/metrics v0.5.11 // indirect
 	github.com/bborbe/parse v1.10.19 // indirect
 	github.com/bborbe/run v1.9.34 // indirect
 	github.com/bborbe/strimzi v1.8.12 // indirect
-	github.com/bborbe/validation v1.4.19 // indirect
+	github.com/bborbe/validation v1.4.18 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
