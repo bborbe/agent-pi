@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 - chore: update Go to 1.26.6 and update dependencies
+## v0.1.4
+
+- chore: update Go to 1.26.6 and dependencies (golang.org/x/mod to v0.40.0 to fix GO-2026-6179, GO-2026-6180)
 
 ## v0.1.3
 
