@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- chore: update Go to 1.27.1 and github.com/bborbe/agent to v0.87.1, github.com/bborbe/kafka to v1.25.12, github.com/bborbe/service to v1.10.12, github.com/bborbe/vault-cli to v0.122.0
+
 ## v0.1.10
 
 - fix: update `golang.org/x/crypto` to v0.56.0 — clears the vulnerability gate blocking this repo's CI
