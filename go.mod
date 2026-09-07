@@ -3,14 +3,14 @@ module github.com/bborbe/agent-pi
 go 1.27.1
 
 require (
-	github.com/bborbe/agent v0.87.1
+	github.com/bborbe/agent v0.87.4
 	github.com/bborbe/cqrs v0.6.10
-	github.com/bborbe/errors v1.6.0
-	github.com/bborbe/kafka v1.25.12
+	github.com/bborbe/errors v1.6.1
+	github.com/bborbe/kafka v1.25.15
 	github.com/bborbe/sentry v1.10.1
-	github.com/bborbe/service v1.10.12
-	github.com/bborbe/time v1.27.12
-	github.com/bborbe/vault-cli v0.122.0
+	github.com/bborbe/service v1.10.13
+	github.com/bborbe/time v1.27.14
+	github.com/bborbe/vault-cli v0.126.3
 	github.com/golang/glog v1.2.5
 	github.com/onsi/ginkgo/v2 v2.32.1
 	github.com/onsi/gomega v1.43.0
@@ -22,16 +22,16 @@ require (
 	github.com/Masterminds/semver/v3 v3.5.0 // indirect
 	github.com/bborbe/argument/v2 v2.13.2 // indirect
 	github.com/bborbe/collection v1.20.26 // indirect
-	github.com/bborbe/http v1.26.25 // indirect
-	github.com/bborbe/k8s v1.14.17 // indirect
+	github.com/bborbe/http v1.26.26 // indirect
+	github.com/bborbe/k8s v1.14.19 // indirect
 	github.com/bborbe/kv v1.21.13 // indirect
 	github.com/bborbe/log v1.6.25 // indirect
 	github.com/bborbe/math v1.4.8 // indirect
-	github.com/bborbe/metrics v0.6.1 // indirect
-	github.com/bborbe/parse v1.11.1 // indirect
+	github.com/bborbe/metrics v0.6.2 // indirect
+	github.com/bborbe/parse v1.11.3 // indirect
 	github.com/bborbe/run v1.10.2 // indirect
 	github.com/bborbe/strimzi v1.8.17 // indirect
-	github.com/bborbe/validation v1.4.23 // indirect
+	github.com/bborbe/validation v1.5.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
@@ -57,7 +57,7 @@ require (
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
 	github.com/google/gnostic-models v0.7.1 // indirect
 	github.com/google/go-cmp v0.7.0 // indirect
-	github.com/google/pprof v0.0.0-20260903180319-d6c3cb2f37ec // indirect
+	github.com/google/pprof v0.0.0-20260906184651-6331bc6350fe // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/mux v1.8.1 // indirect
 	github.com/hashicorp/go-uuid v1.0.3 // indirect
