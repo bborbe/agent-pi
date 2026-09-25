@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- feat: keep pi's session storage for a service agent, driven by the executor's `AGENT_TYPE` env — a long-running identity agent needs continuity across prompts, while a task-routed agent must not persist: `pi-agent` mounts a shared volume at `/home/pi/.pi`, so a persisted session would let a later run resume an unrelated earlier task's conversation. `CreatePiRunner` takes the flag and passes it to `PiRunnerConfig.PersistSession`, which defaults false, so every existing agent behaves exactly as before. `AGENT_TYPE` is stamped by the executor from the Config's `spec.type` rather than hand-written into the CR; `cmd/run-task` is the local single-task runner and always passes false.
+- chore: update github.com/bborbe/agent to v0.90.0
+
 ## v0.1.14
 
 - chore: update github.com/bborbe/agent to v0.87.5, github.com/bborbe/kafka to v1.25.16

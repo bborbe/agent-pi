@@ -62,6 +62,11 @@ type application struct {
 	// Model selection.
 	Model string `required:"false" arg:"model" env:"MODEL" usage:"Model name" default:"MiniMax-M2.7-highspeed"`
 
+	// Agent shape, stamped by the executor from the Config's spec.type. "service"
+	// is a long-running identity agent that keeps session continuity; empty (or
+	// anything else) is a task-routed job agent that must not. See factory.AgentTypeService.
+	AgentType string `required:"false" arg:"agent-type" env:"AGENT_TYPE" usage:"Agent shape: 'service' for a long-running identity agent; empty for a task-routed one"`
+
 	// Branch for Kafka result delivery.
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
@@ -130,7 +135,13 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
 	}
 
-	runner := factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv)
+	runner := factory.CreatePiRunner(
+		a.AgentDir,
+		a.AllowedTools,
+		a.Model,
+		piEnv,
+		a.AgentType == factory.AgentTypeService,
+	)
 	provider := factory.CreateAgentProvider(runner, envparse.KeyValuePairs(a.EnvContextRaw))
 	agent, err := provider.Get(ctx, agentlib.TaskType(a.TaskType))
 	if err != nil {
