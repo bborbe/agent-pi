@@ -73,7 +73,9 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
 	}
 
-	runner := factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv)
+	// run-task is the local single-task runner, so it is always the job shape:
+	// persistSession stays false and no session outlives the run.
+	runner := factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv, false)
 	agent := factory.CreateAgent(runner, envparse.KeyValuePairs(a.EnvContextRaw))
 
 	result, err := agent.Run(ctx, a.Phase, string(taskContent), deliverer)

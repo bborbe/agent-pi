@@ -22,7 +22,7 @@ var _ = Describe("CreateAgentProvider", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		runner := factory.CreatePiRunner("agent", "", "", map[string]string{})
+		runner := factory.CreatePiRunner("agent", "", "", map[string]string{}, false)
 		provider = factory.CreateAgentProvider(runner, map[string]string{})
 	})
 
@@ -76,5 +76,15 @@ var _ = Describe("CreateAgentProvider", func() {
 		It("error message contains the sorted accepted-types list", func() {
 			Expect(err.Error()).To(ContainSubstring("[healthcheck llm oauth-probe]"))
 		})
+	})
+})
+
+var _ = Describe("AgentTypeService", func() {
+	It("pins the literal the executor stamps, so a rename cannot pass silently", func() {
+		// The executor owns this value (AgentTypeService in its CRD types package);
+		// agent-pi only reads it. If either side changes the literal the two stop
+		// agreeing, and the failure is silent — sessions simply stop persisting,
+		// with nothing logged. Pinning it here turns that into a red test.
+		Expect(factory.AgentTypeService).To(Equal("service"))
 	})
 })

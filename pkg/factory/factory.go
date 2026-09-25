@@ -20,18 +20,31 @@ import (
 // ServiceName is the canonical service name for the agent-pi binary.
 const ServiceName = "agent-pi"
 
+// AgentTypeService is the AGENT_TYPE value the executor stamps for a Config whose
+// spec.type is service. The executor owns this value — it comes from
+// AgentTypeService in agent-task-executor/k8s/apis/agent.benjamin-borbe.de/v1 —
+// and this side only reads it. The coupling is silent when it breaks: a mismatch
+// means sessions simply stop persisting, with nothing logged.
+const AgentTypeService = "service"
+
 // CreatePiRunner constructs a Pi Runner pre-configured with tools, model, and env.
+//
+// persistSession keeps pi's session storage across runs. It is true only for a
+// long-running identity agent and must stay false for a task-routed one, whose
+// runs are unrelated tasks sharing one volume — see PiRunnerConfig.PersistSession.
 func CreatePiRunner(
 	agentDir string,
 	allowedTools string,
 	model string,
 	env map[string]string,
+	persistSession bool,
 ) pilib.Runner {
 	return pilib.NewRunner(pilib.PiRunnerConfig{
-		AgentDir:     agentDir,
-		AllowedTools: allowedTools,
-		Model:        model,
-		Env:          env,
+		AgentDir:       agentDir,
+		AllowedTools:   allowedTools,
+		Model:          model,
+		Env:            env,
+		PersistSession: persistSession,
 	})
 }
 
