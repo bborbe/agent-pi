@@ -12,7 +12,12 @@ package main
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"net/http"
+	"net/url"
 	"os"
+	"strings"
 	"time"
 
 	agentlib "github.com/bborbe/agent"
@@ -21,13 +26,16 @@ import (
 	libmetrics "github.com/bborbe/agent/metrics"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
+	libhttp "github.com/bborbe/http"
 	libkafka "github.com/bborbe/kafka"
+	"github.com/bborbe/run"
 	libsentry "github.com/bborbe/sentry"
 	"github.com/bborbe/service"
 	libtime "github.com/bborbe/time"
 	"github.com/bborbe/vault-cli/pkg/domain"
 	"github.com/golang/glog"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/bborbe/agent-pi/pkg/factory"
@@ -50,8 +58,27 @@ type application struct {
 	// Allowed tools (comma-separated)
 	AllowedTools string `required:"false" arg:"allowed-tools" env:"ALLOWED_TOOLS" usage:"Comma-separated list of allowed tools"`
 
-	// Task content from agent pipeline
-	TaskContent string `required:"true" arg:"task-content" env:"TASK_CONTENT" usage:"Raw task markdown from vault"`
+	// Task content from agent pipeline.
+	//
+	// Deliberately not `required:"true"`: the tag is static and cannot be
+	// conditional, but a service agent has no task — it is a long-running
+	// identity addressed directly, which is exactly why the CRD exempts
+	// `type: service` from the taskType requirement. The requirement is enforced
+	// in Run instead, where the agent shape is known: a task-routed agent still
+	// fails fast when it is empty.
+	TaskContent string `required:"false" arg:"task-content" env:"TASK_CONTENT" usage:"Raw task markdown from vault; required unless AGENT_TYPE=service"`
+
+	// Listen is the address a service agent binds for readiness and metrics.
+	// A task-routed agent runs one task and exits, so it never serves.
+	Listen string `required:"false" arg:"listen" env:"LISTEN" usage:"Address for readiness/metrics (service agents only)" default:":9090"`
+
+	// ProviderBaseURL is the provider endpoint the pi CLI talks to; it is passed
+	// through to the subprocess unchanged. A service agent also *dials* it for its
+	// readiness check, so pointing it at an unroutable address makes the pod report
+	// NotReady — which is what proves the probe tests provider reachability rather
+	// than mere process liveness. Empty means "the pi CLI's own default", and the
+	// check is skipped rather than guessed.
+	ProviderBaseURL string `required:"false" arg:"provider-base-url" env:"PROVIDER_BASE_URL" usage:"Provider endpoint; a service agent dials it for readiness"`
 
 	// Environment context passed to prompt (comma-separated KEY=VALUE pairs)
 	EnvContextRaw string `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
@@ -102,31 +129,29 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 	glog.V(2).Infof("agent-pi started phase=%s", a.Phase)
 
-	deliverer := delivery.NewNoopResultDeliverer()
-	if a.TaskID != "" {
-		if len(a.KafkaBrokers) == 0 {
-			jobMetrics.RecordRun(agentlib.AgentStatusFailed)
-			jobMetrics.RecordDuration(time.Since(start))
-			return errors.Errorf(ctx, "KAFKA_BROKERS must be set when TASK_ID is set")
-		}
-		syncProducer, err := libkafka.NewSyncProducerWithName(
+	deliverer, closeDeliverer, err := a.createDeliverer(ctx)
+	if err != nil {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return err
+	}
+	defer closeDeliverer()
+
+	// A service agent is a long-running identity, not a task runner: it has no
+	// TASK_CONTENT, and its job is to stay alive and answer when addressed. That is
+	// why the CRD exempts `type: service` from the taskType requirement, and why
+	// this branch comes before the runner is built — nothing below it is needed to
+	// stay up.
+	if a.AgentType == factory.AgentTypeService {
+		return a.runService(ctx, registry)
+	}
+	if a.TaskContent == "" {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return errors.Errorf(
 			ctx,
-			a.KafkaBrokers,
-			factory.ServiceName,
-		)
-		if err != nil {
-			jobMetrics.RecordRun(agentlib.AgentStatusFailed)
-			jobMetrics.RecordDuration(time.Since(start))
-			return errors.Wrap(ctx, err, "create sync producer")
-		}
-		defer func() {
-			if err := syncProducer.Close(); err != nil {
-				glog.Warningf("close sync producer failed: %v", err)
-			}
-		}()
-		deliverer = factory.CreateKafkaResultDeliverer(
-			syncProducer, a.TopicPrefix, a.TaskID, a.TaskContent,
-			libtime.NewCurrentDateTime(),
+			"TASK_CONTENT is required for a task-routed agent; it is optional only when AGENT_TYPE=%s",
+			factory.AgentTypeService,
 		)
 	}
 
@@ -159,4 +184,127 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	jobMetrics.RecordRun(result.Status)
 	jobMetrics.RecordDuration(time.Since(start))
 	return agentlib.PrintResult(ctx, result)
+}
+
+// createDeliverer builds the result deliverer: a no-op unless a TASK_ID is set, in
+// which case results are published back to the task controller over Kafka. The
+// returned func closes the producer and is always safe to call, so the caller can
+// defer it unconditionally rather than branching on whether one was opened.
+func (a *application) createDeliverer(
+	ctx context.Context,
+) (agentlib.ResultDeliverer, func(), error) {
+	if a.TaskID == "" {
+		return delivery.NewNoopResultDeliverer(), func() {}, nil
+	}
+	if len(a.KafkaBrokers) == 0 {
+		return nil, func() {}, errors.Errorf(ctx, "KAFKA_BROKERS must be set when TASK_ID is set")
+	}
+	syncProducer, err := libkafka.NewSyncProducerWithName(
+		ctx,
+		a.KafkaBrokers,
+		factory.ServiceName,
+	)
+	if err != nil {
+		return nil, func() {}, errors.Wrap(ctx, err, "create sync producer")
+	}
+	closer := func() {
+		if err := syncProducer.Close(); err != nil {
+			glog.Warningf("close sync producer failed: %v", err)
+		}
+	}
+	return factory.CreateKafkaResultDeliverer(
+		syncProducer, a.TopicPrefix, a.TaskID, a.TaskContent,
+		libtime.NewCurrentDateTime(),
+	), closer, nil
+}
+
+// runService is the long-running half of this binary. A service agent has no task
+// to run, so instead of executing one and exiting it stays alive and serves
+// readiness — the shape the Config's `type: service` selects, and the reason a
+// StatefulSet rather than a Job is the right workload for it.
+func (a *application) runService(
+	ctx context.Context,
+	registry *prometheus.Registry,
+) error {
+	glog.V(2).Infof("agent-pi service mode: no task to run; serving readiness on %s", a.Listen)
+	return service.Run(
+		ctx,
+		func(ctx context.Context) error {
+			<-ctx.Done()
+			return nil
+		},
+		a.createHTTPServer(registry),
+	)
+}
+
+// createHTTPServer serves readiness and metrics for a service agent.
+func (a *application) createHTTPServer(registry *prometheus.Registry) run.Func {
+	return func(ctx context.Context) error {
+		router := http.NewServeMux()
+		router.Handle("/readiness", a.readinessHandler())
+		router.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+		glog.V(2).Infof("starting http server listen on %s", a.Listen)
+		return libhttp.NewServer(a.Listen, router).Run(ctx)
+	}
+}
+
+// readinessHandler reports whether this agent can reach its provider.
+//
+// It *dials* rather than calling the API: the question a readiness probe asks is
+// "can this agent reach its provider at all", and a dial answers it without
+// spending a request or needing a valid key. That is also what makes the check
+// falsifiable — pointing PROVIDER_BASE_URL at an unroutable address must turn the
+// probe red, or it is only testing that the process is alive, which liveness
+// already covers.
+//
+// With PROVIDER_BASE_URL unset the provider is the pi CLI's own default, which
+// this binary does not know, so the check is skipped and reported as such rather
+// than guessed at.
+func (a *application) readinessHandler() http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if a.ProviderBaseURL == "" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = fmt.Fprint(w, "OK (PROVIDER_BASE_URL unset — provider reachability not checked)")
+			return
+		}
+		addr, err := dialAddress(a.ProviderBaseURL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusServiceUnavailable)
+			return
+		}
+		conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		if err != nil {
+			http.Error(
+				w,
+				fmt.Sprintf("provider unreachable at %s: %v", addr, err),
+				http.StatusServiceUnavailable,
+			)
+			return
+		}
+		_ = conn.Close()
+		w.WriteHeader(http.StatusOK)
+		_, _ = fmt.Fprintf(w, "OK (provider reachable at %s)", addr)
+	})
+}
+
+// dialAddress turns a provider base URL into a host:port to dial, defaulting the
+// port from the scheme so `https://host` and `host` both work.
+func dialAddress(raw string) (string, error) {
+	parsed, err := url.Parse(raw)
+	if err != nil {
+		return "", errors.Wrapf(context.Background(), err, "parse PROVIDER_BASE_URL %q", raw)
+	}
+	host := parsed.Host
+	if host == "" {
+		// No scheme — treat the whole value as host[:port].
+		host = raw
+	}
+	if !strings.Contains(host, ":") {
+		if parsed.Scheme == "http" {
+			host += ":80"
+		} else {
+			host += ":443"
+		}
+	}
+	return host, nil
 }
