@@ -104,8 +104,14 @@ type application struct {
 	Phase domain.TaskPhase `required:"false" arg:"phase" env:"PHASE" usage:"Agent phase: planning | execution | ai_review" default:"execution"`
 
 	// Kafka delivery (optional — only active when TASK_ID is set).
-	KafkaBrokers libkafka.Brokers        `required:"false" arg:"kafka-brokers" env:"KAFKA_BROKERS" usage:"Comma separated list of Kafka brokers"`
-	TaskID       agentlib.TaskIdentifier `required:"false" arg:"task-id"       env:"TASK_ID"       usage:"Agent task identifier for publishing results back to task controller"`
+	KafkaBrokers libkafka.Brokers `required:"false" arg:"kafka-brokers" env:"KAFKA_BROKERS" usage:"Comma separated list of Kafka brokers"`
+	// Plain string rather than agentlib.TaskIdentifier: that type's own Validate()
+	// rejects an empty value, and the framework runs *type* validation on every
+	// field whether or not it is `required` — so a service agent, which has no task
+	// and therefore no identifier, could not start even once TASK_CONTENT stopped
+	// being mandatory. Same class as TASK_CONTENT, one field over. The value is
+	// converted at the point of use, where a non-empty identifier is actually needed.
+	TaskID string `required:"false" arg:"task-id"       env:"TASK_ID"       usage:"Agent task identifier for publishing results back to task controller"`
 
 	PushgatewayURL string `required:"false" arg:"pushgateway-url" env:"PUSHGATEWAY_URL" usage:"Prometheus PushGateway URL"          default:"http://pushgateway:9090"`
 	TaskType       string `required:"false" arg:"task-type"       env:"TASK_TYPE"       usage:"Task type label for metric grouping" default:"unknown"`
@@ -213,7 +219,10 @@ func (a *application) createDeliverer(
 		}
 	}
 	return factory.CreateKafkaResultDeliverer(
-		syncProducer, a.TopicPrefix, a.TaskID, a.TaskContent,
+		syncProducer,
+		a.TopicPrefix,
+		agentlib.TaskIdentifier(a.TaskID),
+		a.TaskContent,
 		libtime.NewCurrentDateTime(),
 	), closer, nil
 }
