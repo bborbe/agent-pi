@@ -12,18 +12,23 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	agentlib "github.com/bborbe/agent"
 	delivery "github.com/bborbe/agent/delivery"
 	"github.com/bborbe/agent/envparse"
 	libmetrics "github.com/bborbe/agent/metrics"
+	pilib "github.com/bborbe/agent/pi"
 	"github.com/bborbe/cqrs/base"
 	"github.com/bborbe/errors"
 	libhttp "github.com/bborbe/http"
@@ -42,6 +47,12 @@ import (
 )
 
 const agentName = "pi-agent"
+
+// maxPromptBytes bounds the body a single /prompt request may carry. The endpoint is
+// unauthenticated and reachable by anything in the namespace, so an unbounded read
+// would let one caller exhaust the pod's memory — and a service agent that dies is
+// precisely the failure this workload shape exists to avoid.
+const maxPromptBytes = 1 << 20
 
 func main() {
 	app := &application{}
@@ -146,8 +157,13 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	// A service agent is a long-running identity, not a task runner: it has no
 	// TASK_CONTENT, and its job is to stay alive and answer when addressed. That is
 	// why the CRD exempts `type: service` from the taskType requirement, and why
-	// this branch comes before the runner is built — nothing below it is needed to
-	// stay up.
+	// this branch comes before the *task* runner is built — nothing below it is
+	// needed to serve a task.
+	//
+	// It must not be read as "a service agent needs no runner": runService builds
+	// one of its own, with persistence on. Taking this branch as licence to skip the
+	// runner entirely is what left a service agent unable to hold a session while
+	// still reporting Ready.
 	if a.AgentType == factory.AgentTypeService {
 		return a.runService(ctx, registry)
 	}
@@ -161,18 +177,12 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		)
 	}
 
-	piEnv := map[string]string{}
-	if a.ProviderAPIKey != "" {
-		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
-	}
-
-	runner := factory.CreatePiRunner(
-		a.AgentDir,
-		a.AllowedTools,
-		a.Model,
-		piEnv,
-		a.AgentType == factory.AgentTypeService,
-	)
+	// Persistence is off here, and it is now a literal rather than
+	// `a.AgentType == factory.AgentTypeService`: the service branch above returns
+	// before this line, so that comparison could only ever be false — it read as a
+	// live decision while being a constant. The service path builds its own runner
+	// with persistence on, in runService.
+	runner := a.createRunner(false)
 	provider := factory.CreateAgentProvider(runner, envparse.KeyValuePairs(a.EnvContextRaw))
 	agent, err := provider.Get(ctx, agentlib.TaskType(a.TaskType))
 	if err != nil {
@@ -190,6 +200,20 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	jobMetrics.RecordRun(result.Status)
 	jobMetrics.RecordDuration(time.Since(start))
 	return agentlib.PrintResult(ctx, result)
+}
+
+// createRunner builds the Pi runner this binary runs prompts with.
+//
+// persistSession keeps pi's session storage instead of discarding it. It is true
+// only on the service path: a task-routed agent's runs are unrelated tasks sharing
+// one volume, so resuming one task's conversation inside another would be a defect
+// rather than a feature — see PiRunnerConfig.PersistSession.
+func (a *application) createRunner(persistSession bool) pilib.Runner {
+	piEnv := map[string]string{}
+	if a.ProviderAPIKey != "" {
+		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
+	}
+	return factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv, persistSession)
 }
 
 // createDeliverer builds the result deliverer: a no-op unless a TASK_ID is set, in
@@ -228,33 +252,103 @@ func (a *application) createDeliverer(
 }
 
 // runService is the long-running half of this binary. A service agent has no task
-// to run, so instead of executing one and exiting it stays alive and serves
-// readiness — the shape the Config's `type: service` selects, and the reason a
+// to run, so instead of executing one and exiting it stays alive and answers when
+// addressed — the shape the Config's `type: service` selects, and the reason a
 // StatefulSet rather than a Job is the right workload for it.
 func (a *application) runService(
 	ctx context.Context,
 	registry *prometheus.Registry,
 ) error {
-	glog.V(2).Infof("agent-pi service mode: no task to run; serving readiness on %s", a.Listen)
+	glog.V(2).Infof(
+		"agent-pi service mode: serving readiness, metrics and prompt intake on %s",
+		a.Listen,
+	)
+	// The runner is built here, with persistence ON. Building it is the point: a
+	// service agent that never constructs one cannot hold a session, which is the
+	// one thing this shape exists to do.
 	return service.Run(
 		ctx,
 		func(ctx context.Context) error {
 			<-ctx.Done()
 			return nil
 		},
-		a.createHTTPServer(registry),
+		a.createHTTPServer(registry, a.createRunner(true)),
 	)
 }
 
-// createHTTPServer serves readiness and metrics for a service agent.
-func (a *application) createHTTPServer(registry *prometheus.Registry) run.Func {
+// createHTTPServer serves readiness, metrics and prompt intake for a service agent.
+func (a *application) createHTTPServer(
+	registry *prometheus.Registry,
+	runner pilib.Runner,
+) run.Func {
 	return func(ctx context.Context) error {
 		router := http.NewServeMux()
 		router.Handle("/readiness", a.readinessHandler())
 		router.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
+		router.Handle("/prompt", a.promptHandler(runner))
 		glog.V(2).Infof("starting http server listen on %s", a.Listen)
 		return libhttp.NewServer(a.Listen, router).Run(ctx)
 	}
+}
+
+// promptHandler runs one prompt through the same Pi runner the task path uses and
+// returns its answer as plain text.
+//
+// It exists so a service agent can actually be addressed. Without an intake the
+// service starts, serves readiness and looks healthy while never building a runner
+// at all — which makes "holds a session across two prompts" unprovable against the
+// shipped artifact, and unprovable is indistinguishable from absent. Delivering the
+// prompts by exec'ing `pi` inside the pod instead would prove the volume persists
+// while skipping the runner: it would re-test the part already covered by unit specs
+// and skip the part that was missing.
+//
+// The request body is the prompt, the response body the runner's result. The handler
+// itself persists nothing — session continuity belongs to the runner, via
+// PersistSession, and it is the *second* request that exercises it.
+//
+// Unauthenticated by design, and reachable only from inside the namespace: this
+// service has no Ingress and runs in dev. The prompt is never logged — only its
+// length and a short digest — so the pod's log corroborates which turn ran without
+// becoming a second copy of the conversation.
+func (a *application) promptHandler(runner pilib.Runner) http.Handler {
+	// One identity holds one conversation, so prompts are serialized. The runner
+	// writes its session to a single store on the mounted volume, and two runs
+	// interleaved there would corrupt the very continuity this shape exists to keep
+	// — the failure would surface later, as a resumed conversation that is subtly
+	// someone else's, which is worse than a slow request.
+	var mu sync.Mutex
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, maxPromptBytes))
+		if err != nil {
+			http.Error(w, fmt.Sprintf("read prompt: %v", err), http.StatusBadRequest)
+			return
+		}
+		prompt := strings.TrimSpace(string(body))
+		if prompt == "" {
+			http.Error(w, "empty prompt", http.StatusBadRequest)
+			return
+		}
+		digest := sha256.Sum256([]byte(prompt))
+		glog.V(2).Infof(
+			"prompt intake: bytes=%d sha256=%s",
+			len(prompt),
+			hex.EncodeToString(digest[:8]),
+		)
+		mu.Lock()
+		defer mu.Unlock()
+		result, err := runner.Run(r.Context(), prompt)
+		if err != nil {
+			glog.Warningf("prompt intake failed: %v", err)
+			http.Error(w, "prompt failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = fmt.Fprint(w, result.GetResult())
+	})
 }
 
 // readinessHandler reports whether this agent can reach its provider.
