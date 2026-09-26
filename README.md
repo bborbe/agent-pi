@@ -9,8 +9,22 @@ New agents are created by swapping instructions (agent `AGENTS.md` guardrails) a
 1. Agent pipeline ([[task/controller]] → Kafka → [[task/executor]]) spawns a K8s Job with the `agent-pi` image.
 2. The Job receives `TASK_CONTENT`, `TASK_ID`, `BRANCH`, `ALLOWED_TOOLS`, `MODEL`, `PHASE`, etc. via env vars.
 3. `main.go` assembles the prompt via `lib/pi` (embedded `workflow.md` + `output-format.md` + task content).
-4. Runs `pi --print --mode json --no-session` with the allowed tools and selected model.
+4. Runs `pi --print --mode json` with the allowed tools and selected model — adding `--no-session` unless the agent is a service agent, whose sessions must persist (see below).
 5. Parses the JSON result and publishes to Kafka via `lib/delivery.KafkaResultDeliverer` (when `TASK_ID` set), or falls back to `NoopResultDeliverer` for local runs.
+
+## Service Agents
+
+A Config with `spec.type: service` is a long-running identity rather than a task runner: the executor stamps `AGENT_TYPE=service`, and the binary then stays alive instead of running one task and exiting. It serves three endpoints on `LISTEN` (default `:9090`):
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/readiness` | GET | 200 when the provider is reachable, 503 when it is not (or unparseable); skipped, and said to be skipped, when `PROVIDER_BASE_URL` is unset |
+| `/metrics` | GET | Prometheus registry |
+| `/prompt` | POST | Runs one prompt through the Pi runner and returns its answer as plain text |
+
+`/prompt` is what makes the shape addressable, and it is the seam a chat transport would use. Its body is the prompt and its response is the runner's result; the handler itself persists nothing. Session continuity belongs to the runner, via `PiRunnerConfig.PersistSession`, which is on for a service agent and off for a task-routed one — a task-routed agent's runs are unrelated tasks sharing one volume, so resuming one task's conversation inside another would be a defect rather than a feature.
+
+The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and the prompt is never logged — only its length and a short digest.
 
 ## Env Vars
 
