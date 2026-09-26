@@ -9,8 +9,21 @@ RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -mod=vendor -ldflags "-s" -a -in
 CMD ["/bin/bash"]
 
 FROM ${DOCKER_REGISTRY}/alpine:3.24 AS alpine
+# The pi CLI is pinned deliberately, and this pin is load-bearing.
+#
+# `pi --mode json` emits a stream of `{"type": ...}` events that the runner parses
+# **by name**, and the names have changed once already: pi 0.87.x emits
+# `message_end` where older builds emitted `agent_end`. Installed unpinned, an image
+# rebuild silently adopts whatever vocabulary is current, and the runner then reports
+# "no result found in pi CLI output" on runs that in fact succeeded — a symptom that
+# reads as a model failure and is a parser mismatch. That is not hypothetical: it is
+# what a v0.4.0 image did on 2026-09-26, and it was invisible because the fleet's
+# working agents run older images.
+#
+# Bump this deliberately, and when you do, check `extractEventText` in
+# github.com/bborbe/agent's pi/pi-runner.go against the new stream.
 RUN apk --no-cache add ca-certificates curl bash nodejs npm \
- && npm install -g --omit=dev --no-optional @earendil-works/pi-coding-agent \
+ && npm install -g --omit=dev --no-optional @earendil-works/pi-coding-agent@0.87.1 \
  && npm cache clean --force \
  && apk del npm \
  && rm -rf /root/.npm /tmp/*
