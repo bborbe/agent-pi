@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.3.0
 
 - feat: run as a service agent instead of exiting without a task. The binary declared `TASK_CONTENT` as `required:"true"`, so a long-running identity agent — which by definition has no task — crashlooped at startup with `parse app failed: validate required failed: Required field empty, define parameter task-content or define env TASK_CONTENT`. The requirement is now enforced in `Run` rather than by the struct tag, because the tag is static and cannot be conditional: a task-routed agent still fails fast on an empty `TASK_CONTENT`, while `AGENT_TYPE=service` stays alive and serves `/readiness` and `/metrics` through the same `service.Run` + `libhttp.NewServer` pair the framework's own example uses. The readiness check **dials** `PROVIDER_BASE_URL` rather than calling the provider — the question a probe asks is whether the provider is *reachable*, and a dial answers it without spending a request or needing a valid key. That is what makes it falsifiable: a liveness check would pass against an unreachable provider too, so pointing `PROVIDER_BASE_URL` at an unroutable address must turn the probe red or the probe proves nothing. With `PROVIDER_BASE_URL` unset the pi CLI's own default applies, which this binary cannot know, so the check is skipped and says so rather than guessing. Found on a live cluster: the service agent's pod had every layer below the binary correct — image, `AGENT_TYPE`, bound volume, scheduling — and still could not start.
 
