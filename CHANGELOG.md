@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.4.1
 
 - fix: pin the pi CLI to `0.87.1` and bump `github.com/bborbe/agent` to `v0.90.3` for the parser fix that pin depends on. pi was installed **unpinned**, and its `--mode json` output is a stream of `{"type": ...}` events that the runner parses **by name** — names that have already changed once: pi 0.87.x emits `message_end` where older builds emitted `agent_end`. Installed unpinned, an image rebuild silently adopts whatever vocabulary is current, and the runner then answers `no result found in pi CLI output` on runs that in fact succeeded: a symptom that reads as a model failure and is a parser mismatch. That is not hypothetical — it is exactly what the `v0.4.0` image did on 2026-09-26, and it stayed invisible because the fleet's working agents run older images (`pi-agent` is pinned at `v0.1.7`) while the freshly-built ones had never been prompted. `v0.90.3` teaches the parser the current vocabulary; **this pin is what stops the next rebuild breaking it again**, and the Dockerfile comment records what to check when it is deliberately bumped — a pin with no instructions is a pin someone removes.
 
