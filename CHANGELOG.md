@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.3.1
 
 - fix: let a service agent start when it has no `TASK_ID`. `v0.3.0` made `TASK_CONTENT` conditional on the agent shape, but `TaskID` was still declared as `agentlib.TaskIdentifier`, whose own `Validate()` rejects an empty value — and the framework runs **type** validation on every field whether or not it is `required`. So a service agent, which has no task and therefore no identifier, still failed at startup: `field TaskID (type lib.TaskIdentifier) validation failed: identifier missing`. **Same class as the `TASK_CONTENT` fix, one field over** — the instance I saw was fixed and the adjacent one of identical shape was missed, which is the recurring shape of this whole deploy: a requirement satisfied in one place and re-asserted in another. The field is now a plain string, converted to `TaskIdentifier` at the point of use, where a non-empty identifier is actually needed. **Only running it could find this**: the failure is in the framework's argument parsing, which no spec in this repo exercises, so a green suite said nothing about it.
 
