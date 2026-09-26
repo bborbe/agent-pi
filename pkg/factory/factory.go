@@ -29,22 +29,29 @@ const AgentTypeService = "service"
 
 // CreatePiRunner constructs a Pi Runner pre-configured with tools, model, and env.
 //
-// persistSession keeps pi's session storage across runs. It is true only for a
-// long-running identity agent and must stay false for a task-routed one, whose
-// runs are unrelated tasks sharing one volume — see PiRunnerConfig.PersistSession.
+// sessionID is the agent's session identity: empty for a task-routed agent, set for
+// a long-running identity agent. It is deliberately the *single* knob for both halves
+// of continuity rather than a separate persist flag — persistence without an identity
+// writes a transcript that nothing ever reads, which is exactly the defect that made
+// a service agent save every conversation and remember none of them. Passing an id
+// turns persistence on and pins the run to it; passing "" leaves the agent ephemeral,
+// so a task-routed run still leaves nothing behind on the shared volume.
+//
+// See PiRunnerConfig.SessionID for why this is --session-id rather than --continue.
 func CreatePiRunner(
 	agentDir string,
 	allowedTools string,
 	model string,
 	env map[string]string,
-	persistSession bool,
+	sessionID string,
 ) pilib.Runner {
 	return pilib.NewRunner(pilib.PiRunnerConfig{
 		AgentDir:       agentDir,
 		AllowedTools:   allowedTools,
 		Model:          model,
 		Env:            env,
-		PersistSession: persistSession,
+		PersistSession: sessionID != "",
+		SessionID:      sessionID,
 	})
 }
 

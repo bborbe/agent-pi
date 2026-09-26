@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- fix: give a service agent a session identity, so it actually remembers its conversation. `v0.4.0` wired the runner and `v0.4.1` made it able to read pi's answers, but the agent still forgot everything between prompts: `PersistSession` only omitted `--no-session`, which governs whether pi **writes** the transcript, and reading it back is a different flag. Observed live — turn 1 returned `ACK`, turn 2 returned *"No token was previously requested to be remembered"*, which is exactly what a fresh session says. `runService` now builds its runner with `serviceSessionID`, and `CreatePiRunner` takes the session id as **one** parameter rather than a persist flag plus an id, because persistence without an identity is the defect itself: it writes a transcript nothing ever reads. `--session-id` rather than `--continue` because it **creates the session when it is missing**, so a brand-new agent's first prompt behaves exactly like its thousandth. The task path passes `""` and stays ephemeral, leaving nothing behind on the shared volume.
+- chore: update github.com/bborbe/agent to v0.90.4
+
 ## v0.4.1
 
 - fix: pin the pi CLI to `0.87.1` and bump `github.com/bborbe/agent` to `v0.90.3` for the parser fix that pin depends on. pi was installed **unpinned**, and its `--mode json` output is a stream of `{"type": ...}` events that the runner parses **by name** — names that have already changed once: pi 0.87.x emits `message_end` where older builds emitted `agent_end`. Installed unpinned, an image rebuild silently adopts whatever vocabulary is current, and the runner then answers `no result found in pi CLI output` on runs that in fact succeeded: a symptom that reads as a model failure and is a parser mismatch. That is not hypothetical — it is exactly what the `v0.4.0` image did on 2026-09-26, and it stayed invisible because the fleet's working agents run older images (`pi-agent` is pinned at `v0.1.7`) while the freshly-built ones had never been prompted. `v0.90.3` teaches the parser the current vocabulary; **this pin is what stops the next rebuild breaking it again**, and the Dockerfile comment records what to check when it is deliberately bumped — a pin with no instructions is a pin someone removes.

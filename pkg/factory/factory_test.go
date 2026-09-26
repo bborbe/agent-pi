@@ -22,7 +22,7 @@ var _ = Describe("CreateAgentProvider", func() {
 
 	BeforeEach(func() {
 		ctx = context.Background()
-		runner := factory.CreatePiRunner("agent", "", "", map[string]string{}, false)
+		runner := factory.CreatePiRunner("agent", "", "", map[string]string{}, "")
 		provider = factory.CreateAgentProvider(runner, map[string]string{})
 	})
 
