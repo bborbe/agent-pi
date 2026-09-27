@@ -73,9 +73,10 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
 	}
 
-	// run-task is the local single-task runner, so it is always the job shape:
-	// persistSession stays false and no session outlives the run.
-	runner := factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv, false)
+	// run-task is the local single-task runner, so it is always the job shape. The
+	// empty session id is what says so: no identity to resume, and therefore no
+	// persistence either — a run leaves nothing behind.
+	runner := factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv, "")
 	agent := factory.CreateAgent(runner, envparse.KeyValuePairs(a.EnvContextRaw))
 
 	result, err := agent.Run(ctx, a.Phase, string(taskContent), deliverer)

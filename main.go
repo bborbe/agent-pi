@@ -54,6 +54,15 @@ const agentName = "pi-agent"
 // precisely the failure this workload shape exists to avoid.
 const maxPromptBytes = 1 << 20
 
+// serviceSessionID is the session identity a service agent's runner is pinned to.
+//
+// A constant is enough because each service agent has its own pod and its own volume,
+// so the id only has to be stable within one agent. And because pi's `--session-id`
+// *creates the session when it is missing*, the first prompt and the thousandth take
+// the same code path — which is why it is used here rather than `--continue`, whose
+// first run would be resuming nothing.
+const serviceSessionID = "identity"
+
 func main() {
 	app := &application{}
 	os.Exit(service.Main(context.Background(), app, &app.SentryDSN, &app.SentryProxy))
@@ -182,7 +191,7 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	// before this line, so that comparison could only ever be false — it read as a
 	// live decision while being a constant. The service path builds its own runner
 	// with persistence on, in runService.
-	runner := a.createRunner(false)
+	runner := a.createRunner("")
 	provider := factory.CreateAgentProvider(runner, envparse.KeyValuePairs(a.EnvContextRaw))
 	agent, err := provider.Get(ctx, agentlib.TaskType(a.TaskType))
 	if err != nil {
@@ -204,16 +213,18 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 // createRunner builds the Pi runner this binary runs prompts with.
 //
-// persistSession keeps pi's session storage instead of discarding it. It is true
-// only on the service path: a task-routed agent's runs are unrelated tasks sharing
-// one volume, so resuming one task's conversation inside another would be a defect
-// rather than a feature — see PiRunnerConfig.PersistSession.
-func (a *application) createRunner(persistSession bool) pilib.Runner {
+// sessionID is empty for a task-routed agent and set for a service one. It is one
+// parameter rather than a persist flag plus an id because the two are meaningless
+// apart: persistence without an identity writes a transcript nothing reads, which is
+// exactly what a service agent did before this — it saved every conversation and
+// remembered none of them, answering a follow-up question with "No token was
+// previously requested to be remembered".
+func (a *application) createRunner(sessionID string) pilib.Runner {
 	piEnv := map[string]string{}
 	if a.ProviderAPIKey != "" {
 		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
 	}
-	return factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv, persistSession)
+	return factory.CreatePiRunner(a.AgentDir, a.AllowedTools, a.Model, piEnv, sessionID)
 }
 
 // createDeliverer builds the result deliverer: a no-op unless a TASK_ID is set, in
@@ -272,7 +283,7 @@ func (a *application) runService(
 			<-ctx.Done()
 			return nil
 		},
-		a.createHTTPServer(registry, a.createRunner(true)),
+		a.createHTTPServer(registry, a.createRunner(serviceSessionID)),
 	)
 }
 
