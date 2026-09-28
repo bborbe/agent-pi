@@ -24,7 +24,17 @@ A Config with `spec.type: service` is a long-running identity rather than a task
 
 `/prompt` is what makes the shape addressable, and it is the seam a chat transport would use. Its body is the prompt and its response is the runner's result; the handler itself persists nothing. Session continuity belongs to the runner, via `PiRunnerConfig.PersistSession`, which is on for a service agent and off for a task-routed one — a task-routed agent's runs are unrelated tasks sharing one volume, so resuming one task's conversation inside another would be a defect rather than a feature.
 
-The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and the prompt is never logged — only its length and a short digest.
+### Choosing a session
+
+`X-Session-Id` is an optional request header on `/prompt` naming the conversation the prompt belongs to. A request that omits it is served from the default session, exactly as it was before the header existed, so an existing caller needs no change. A request that sends it is served from its own conversation, created on first use.
+
+The accepted format is `[A-Za-z0-9_][A-Za-z0-9_-]{0,63}` — one to 64 characters, the first of which is not `-`. Anything else, including a present-but-empty value, is answered `400` before the agent process is invoked. The format is a security boundary rather than a style preference: the id reaches the `pi` CLI as a command-line argument, where a leading `-` would be read as a flag.
+
+Requests on different session ids run at the same time. Requests on one session id are serialized — one turn at a time — because a session's transcript is a single store on the mounted volume, and two interleaved runs there would corrupt the continuity the session exists to keep.
+
+A session id is an address, not a credential: the header does not isolate a caller from anyone else who can reach the endpoint, because the endpoint is unauthenticated. The service cannot list, rename, or delete sessions.
+
+The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and neither the prompt nor the session id is ever logged — only the prompt's length and a short digest.
 
 ## Env Vars
 
