@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- chore: adopt dark-factory in this repo. Adds the pipeline trees (`specs/`, `prompts/`), a project `docs/dod.md` wired as `validationPrompt`, and gitignore entries for the daemon's lock and log. The daemon runs with `workflow: direct`, so it commits to the current branch — an unignored `.dark-factory.lock` and `.dark-factory.log` would otherwise have been swept into a prompt's commit.
+
 ## v0.4.2
 
 - fix: give a service agent a session identity, so it actually remembers its conversation. `v0.4.0` wired the runner and `v0.4.1` made it able to read pi's answers, but the agent still forgot everything between prompts: `PersistSession` only omitted `--no-session`, which governs whether pi **writes** the transcript, and reading it back is a different flag. Observed live — turn 1 returned `ACK`, turn 2 returned *"No token was previously requested to be remembered"*, which is exactly what a fresh session says. `runService` now builds its runner with `serviceSessionID`, and `CreatePiRunner` takes the session id as **one** parameter rather than a persist flag plus an id, because persistence without an identity is the defect itself: it writes a transcript nothing ever reads. `--session-id` rather than `--continue` because it **creates the session when it is missing**, so a brand-new agent's first prompt behaves exactly like its thousandth. The task path passes `""` and stays ephemeral, leaving nothing behind on the shared volume.
