@@ -1,7 +1,13 @@
 ---
-status: draft
+status: completed
 spec: [001-per-caller-session-id]
+summary: 'CHANGELOG.md already carried the required feat: bullet naming X-Session-Id (written by prompt 1 of this spec), so per requirement 1 nothing was changed; make precommit exits 0 and all three verification commands pass.'
+execution_id: agent-pi-pi-pin-exec-002-spec-001-changelog-unreleased
+dark-factory-version: v0.196.0
 created: "2026-09-28T21:06:06Z"
+queued: "2026-09-28T21:38:00Z"
+started: "2026-09-28T21:38:01Z"
+completed: "2026-09-28T21:42:39Z"
 branch: dark-factory/per-caller-session-id
 ---
 
@@ -25,14 +31,14 @@ Read these before editing:
 - `CHANGELOG.md` — read the top of the file. It has a frozen header block (`# Changelog`, the "All notable changes…" line), then an existing `## Unreleased` section that already carries one unrelated `chore:` bullet (adopting dark-factory in this repo), then the newest released section, `## v0.4.2`. You are adding your `feat:` bullet to the existing `## Unreleased` section — do not add a second heading, and do not remove the `chore:` bullet.
 - `docs/dod.md` — this repo's definition of done, in particular its repository-hygiene rule for the changelog.
 - `/home/node/.claude/plugins/marketplaces/coding/docs/changelog-guide.md` — the entry format, the conventional prefixes, and the rules for the header block and for `## Unreleased`.
-- `main.go` — `sessionHeader`, `sessionIDPattern`, `sessionIDFromRequest`, `promptHandler`, `sessionRunners`. Write the entry from the shipped behavior, not from this prompt.
+- `main.go` — `sessionHeader`, `sessionIDPattern`, `sessionIDFromRequest`, `promptHandler`, `sessionRunners`. The first four are created by prompt 1 of this spec (`1-spec-001-session-id-intake.md`), so this prompt must run after it; if any is absent when you start, the behavior is not yet shipped — stop and report rather than describing unshipped behavior. Write the entry from the shipped code, not from this prompt.
 - `README.md` — the `## Service Agents` section, for the reader-facing description of the same behavior.
 
 What changed, in one sentence: a service agent's `/prompt` endpoint now accepts an `X-Session-Id` request header, serving each distinct id as its own conversation — concurrently across ids, one turn at a time within an id — while a request with no header keeps reaching the default conversation exactly as before, and an id outside `[A-Za-z0-9_][A-Za-z0-9_-]{0,63}` is answered `400` before the agent process is invoked.
 </context>
 
 <requirements>
-1. **Add your bullet to the existing `## Unreleased` section in `CHANGELOG.md`.** That section already sits after the header block and directly above `## v0.4.2`; do not add a second `## Unreleased` heading. The header block is frozen: do not move, delete, or insert anything above or inside the `# Changelog` title, the "All notable changes…" line, or the blank lines around them. The existing `chore:` bullet stays exactly as it is.
+1. **Add your bullet to the existing `## Unreleased` section in `CHANGELOG.md`** — unless the section already carries a `feat:` bullet describing this change, in which case change nothing and report that the entry is already present. Do not add a second bullet for the same change. That section already sits after the header block and directly above `## v0.4.2`; do not add a second `## Unreleased` heading. The header block is frozen: do not move, delete, or insert anything above or inside the `# Changelog` title, the "All notable changes…" line, or the blank lines around them. The existing `chore:` bullet stays exactly as it is.
 
 2. **Write exactly one new bullet under `## Unreleased`** (the section keeps its existing `chore:` bullet), because this is one logical change. It must begin with a conventional prefix — use `feat:`, since this adds functionality in a backwards-compatible way and therefore selects a minor bump. Follow the guide's shape: `- feat: <what changed> [why it matters]`.
 
@@ -65,5 +71,5 @@ sed -n '/^## Unreleased/,/^## /p' CHANGELOG.md | grep -cE '^- feat: '
 sed -n '/^## Unreleased/,/^## /p' CHANGELOG.md | grep -c 'X-Session-Id'
 ```
 
-The first must pass — the section exists exactly once and is not duplicated. It is a `[ ... ]` test rather than a `grep -c` comparison because the daemon reads exit codes, not printed counts, and `grep -c` exits 0 on a duplicate count of 2. The second must print at least `1` — the section carries a `feat:` bullet; the `chore:` bullet already there describes unrelated work and does not satisfy it. The third must print at least `1` — the new bullet names `X-Session-Id`. Both `grep -c` commands exit non-zero only when the count is zero, which is exactly the failure they are meant to catch.
+The first must pass — the section exists exactly once and is not duplicated. It is a `[ ... ]` test rather than a bare `grep -c` because `grep -c` reports its count on stdout, not through its status, and exits 0 on a duplicate count of 2 — so only the `[ ... ]` form fails on a duplicated heading. The second must print at least `1` — the section carries a `feat:` bullet; the `chore:` bullet already there describes unrelated work and does not satisfy it. The third must print at least `1` — the new bullet names `X-Session-Id`. Both `grep -c` commands exit non-zero only when the count is zero, which is exactly the failure they are meant to catch.
 </verification>

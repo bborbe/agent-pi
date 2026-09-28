@@ -1,8 +1,9 @@
 ---
-status: prompted
+status: verifying
 approved: "2026-09-28T20:59:12Z"
 generating: "2026-09-28T20:59:12Z"
 prompted: "2026-09-28T21:18:55Z"
+verifying: "2026-09-28T21:36:40Z"
 branch: dark-factory/per-caller-session-id
 ---
 
