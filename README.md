@@ -36,6 +36,21 @@ A session id is an address, not a credential: the header does not isolate a call
 
 The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and neither the prompt nor the session id is ever logged — only the prompt's length and a short digest.
 
+### Two conversations on one pod
+
+Four calls: give each session a different word, then ask each one back. They do not see each other.
+
+```bash
+curl -s -X POST -H 'X-Session-Id: session-a' --data 'Remember this word: pelican. Reply with just: OK' http://localhost:9090/prompt
+curl -s -X POST -H 'X-Session-Id: session-b' --data 'Remember this word: walrus. Reply with just: OK' http://localhost:9090/prompt
+curl -s -X POST -H 'X-Session-Id: session-a' --data 'What word did I give you? Reply with just that word.' http://localhost:9090/prompt
+curl -s -X POST -H 'X-Session-Id: session-b' --data 'What word did I give you? Reply with just that word.' http://localhost:9090/prompt
+```
+
+The four answers come back `OK`, `OK`, `pelican`, `walrus` — `session-a` never sees `walrus`, and `session-b` never sees `pelican`. Drop the `-s` to see each response with its status code.
+
+Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://pi-service-0:9090`, and from a workstation a `kubectl port-forward pod/pi-service-0 9090:9090` makes it `localhost:9090` as written.
+
 ## Env Vars
 
 | Var | Required | Default | Purpose |
