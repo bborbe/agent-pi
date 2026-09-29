@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +63,18 @@ const maxPromptBytes = 1 << 20
 // the same code path — which is why it is used here rather than `--continue`, whose
 // first run would be resuming nothing.
 const serviceSessionID = "identity"
+
+// sessionHeader is the request header a caller uses to address a session. It is
+// part of the contract this change establishes: callers depend on the exact
+// spelling, so it is a constant rather than a literal repeated in the handler.
+const sessionHeader = "X-Session-Id"
+
+// sessionIDPattern is the allowed session id format: one to 64 characters, the
+// first of which is not '-'. This is the security boundary, not a style
+// preference — the id reaches the agent CLI as a command-line argument, so a
+// leading '-' would be parsed as a flag, and '.' or '/' would escape a session
+// directory if the id were ever used to build a storage path.
+var sessionIDPattern = regexp.MustCompile(`^[A-Za-z0-9_][A-Za-z0-9_-]{0,63}$`)
 
 func main() {
 	app := &application{}
@@ -211,6 +224,80 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 	return agentlib.PrintResult(ctx, result)
 }
 
+// sessionIDFromRequest resolves the conversation a prompt belongs to from the
+// request's session header.
+//
+// An absent header is an existing caller and resolves to serviceSessionID, the
+// one conversation this service served before the header existed, so nothing
+// already talking to it is orphaned. A present header is the caller's own id and
+// is accepted only if it matches sessionIDPattern — the id reaches the agent CLI
+// as a command-line argument, so it is validated here, before any body is read
+// and before any runner exists, rather than trusted downstream.
+//
+// Absent and present-but-empty are deliberately different outcomes, and
+// http.Header.Values is what tells them apart: Get collapses both to "". An
+// empty value is a present header that does not match, so it is an error.
+//
+// The error deliberately does not carry the id. The id is caller-supplied, and a
+// rejected id in a log line would let the log enumerate what callers asked for.
+func sessionIDFromRequest(r *http.Request) (string, error) {
+	values := r.Header.Values(sessionHeader)
+	if len(values) == 0 {
+		return serviceSessionID, nil
+	}
+	if !sessionIDPattern.MatchString(values[0]) {
+		return "", errors.Errorf(r.Context(), "session id does not match the allowed format")
+	}
+	return values[0], nil
+}
+
+// runnerFactory builds the runner for one session id. It is the seam the prompt
+// handler depends on instead of calling factory.CreatePiRunner directly, so a
+// spec can observe which session id a request resolved to.
+type runnerFactory func(sessionID string) pilib.Runner
+
+// sessionRunner is one session's conversation: the runner that owns it and the
+// lock that serializes turns within it. Two sessions hold two sessionRunners and
+// never contend; two requests on one session share its lock and take turns.
+type sessionRunner struct {
+	mu     sync.Mutex
+	runner pilib.Runner
+}
+
+// sessionRunners holds one runner per session id, built on first use. Building
+// lazily is what lets an unseen session id start a fresh conversation: pi's
+// --session-id creates the session when it is missing, so no registration step
+// exists anywhere in this design.
+type sessionRunners struct {
+	factory runnerFactory
+	mu      sync.Mutex
+	byID    map[string]*sessionRunner
+}
+
+func newSessionRunners(factory runnerFactory) *sessionRunners {
+	return &sessionRunners{
+		factory: factory,
+		byID:    map[string]*sessionRunner{},
+	}
+}
+
+// get returns the sessionRunner for id, building and caching it on first use.
+//
+// s.mu guards the map and nothing else: it is released before the caller takes
+// the session's own lock and runs a prompt, so two different sessions never
+// contend on this store and one session's slow turn cannot delay another's
+// lookup.
+func (s *sessionRunners) get(id string) *sessionRunner {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	session, ok := s.byID[id]
+	if !ok {
+		session = &sessionRunner{runner: s.factory(id)}
+		s.byID[id] = session
+	}
+	return session
+}
+
 // createRunner builds the Pi runner this binary runs prompts with.
 //
 // sessionID is empty for a task-routed agent and set for a service one. It is one
@@ -274,29 +361,32 @@ func (a *application) runService(
 		"agent-pi service mode: serving readiness, metrics and prompt intake on %s",
 		a.Listen,
 	)
-	// The runner is built here, with persistence ON. Building it is the point: a
-	// service agent that never constructs one cannot hold a session, which is the
-	// one thing this shape exists to do.
+	// The store is built here and the runners inside it are built on first use, so
+	// a session exists exactly when a caller addresses it. Building a runner is
+	// construction only — it performs no I/O — so deferring it to the first request
+	// costs nothing and is what lets an unseen session id start a fresh
+	// conversation without a registration step.
+	sessions := newSessionRunners(a.createRunner)
 	return service.Run(
 		ctx,
 		func(ctx context.Context) error {
 			<-ctx.Done()
 			return nil
 		},
-		a.createHTTPServer(registry, a.createRunner(serviceSessionID)),
+		a.createHTTPServer(registry, sessions),
 	)
 }
 
 // createHTTPServer serves readiness, metrics and prompt intake for a service agent.
 func (a *application) createHTTPServer(
 	registry *prometheus.Registry,
-	runner pilib.Runner,
+	sessions *sessionRunners,
 ) run.Func {
 	return func(ctx context.Context) error {
 		router := http.NewServeMux()
 		router.Handle("/readiness", a.readinessHandler())
 		router.Handle("/metrics", promhttp.HandlerFor(registry, promhttp.HandlerOpts{}))
-		router.Handle("/prompt", a.promptHandler(runner))
+		router.Handle("/prompt", a.promptHandler(sessions))
 		glog.V(2).Infof("starting http server listen on %s", a.Listen)
 		return libhttp.NewServer(a.Listen, router).Run(ctx)
 	}
@@ -317,20 +407,28 @@ func (a *application) createHTTPServer(
 // itself persists nothing — session continuity belongs to the runner, via
 // PersistSession, and it is the *second* request that exercises it.
 //
+// The conversation is chosen per request: an optional session header names it, and a
+// request without one is served from the default session exactly as before. Two
+// different ids hold two conversations and run at the same time; two requests on one
+// id take turns, because a session's transcript is a single store on the mounted
+// volume and two runs interleaved there would corrupt the continuity the session
+// exists to keep. The id is validated before the body is read and before a runner is
+// built, so a malformed one costs nothing and cannot reach the agent process.
+//
 // Unauthenticated by design, and reachable only from inside the namespace: this
 // service has no Ingress and runs in dev. The prompt is never logged — only its
-// length and a short digest — so the pod's log corroborates which turn ran without
-// becoming a second copy of the conversation.
-func (a *application) promptHandler(runner pilib.Runner) http.Handler {
-	// One identity holds one conversation, so prompts are serialized. The runner
-	// writes its session to a single store on the mounted volume, and two runs
-	// interleaved there would corrupt the very continuity this shape exists to keep
-	// — the failure would surface later, as a resumed conversation that is subtly
-	// someone else's, which is worse than a slow request.
-	var mu sync.Mutex
+// length and a short digest — and neither is the session id, so the pod's log
+// corroborates which turn ran without becoming a second copy of the conversation or
+// a list of the conversations that exist.
+func (a *application) promptHandler(sessions *sessionRunners) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "POST required", http.StatusMethodNotAllowed)
+			return
+		}
+		sessionID, err := sessionIDFromRequest(r)
+		if err != nil {
+			http.Error(w, "invalid session id", http.StatusBadRequest)
 			return
 		}
 		body, err := io.ReadAll(io.LimitReader(r.Body, maxPromptBytes))
@@ -349,9 +447,10 @@ func (a *application) promptHandler(runner pilib.Runner) http.Handler {
 			len(prompt),
 			hex.EncodeToString(digest[:8]),
 		)
-		mu.Lock()
-		defer mu.Unlock()
-		result, err := runner.Run(r.Context(), prompt)
+		session := sessions.get(sessionID)
+		session.mu.Lock()
+		defer session.mu.Unlock()
+		result, err := session.runner.Run(r.Context(), prompt)
 		if err != nil {
 			glog.Warningf("prompt intake failed: %v", err)
 			http.Error(w, "prompt failed", http.StatusInternalServerError)

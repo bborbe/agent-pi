@@ -13,6 +13,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync"
@@ -157,13 +158,46 @@ func (r *overlapRunner) maxConcurrent() int {
 	return r.max
 }
 
+// memoryRunner is a fake runner that remembers one word per session id, so a
+// spec can show that two session ids hold two conversations and never share one.
+type memoryRunner struct {
+	sessionID string
+	words     map[string]string
+}
+
+func (r *memoryRunner) Run(_ context.Context, prompt string) (*pilib.Result, error) {
+	if word, ok := strings.CutPrefix(prompt, "remember the word "); ok {
+		r.words[r.sessionID] = word
+		return &pilib.Result{Result: "ok"}, nil
+	}
+	return &pilib.Result{Result: r.words[r.sessionID]}, nil
+}
+
+// staticSessions returns a session store whose factory hands out one runner for
+// every session id, for specs that do not care which session a request resolves to.
+func staticSessions(runner pilib.Runner) *sessionRunners {
+	return newSessionRunners(func(string) pilib.Runner { return runner })
+}
+
+// promptRequest builds a POST /prompt request carrying the given session header
+// values. Called with no values it sends no header at all, which is the case
+// existing callers are in; called with one empty value it sends a present but
+// empty header, which is a different case.
+func promptRequest(body string, headerValues ...string) *http.Request {
+	req := httptest.NewRequest("POST", "/prompt", strings.NewReader(body))
+	for _, value := range headerValues {
+		req.Header.Add(sessionHeader, value)
+	}
+	return req
+}
+
 var _ = Describe("promptHandler", func() {
 	It("returns the runner's answer for a POSTed prompt", func() {
 		runner := &fakeRunner{result: &pilib.Result{Result: "the answer"}}
 		app := &application{}
 		recorder := httptest.NewRecorder()
 
-		app.promptHandler(runner).ServeHTTP(
+		app.promptHandler(staticSessions(runner)).ServeHTTP(
 			recorder,
 			httptest.NewRequest("POST", "/prompt", strings.NewReader("a question")),
 		)
@@ -178,7 +212,7 @@ var _ = Describe("promptHandler", func() {
 		app := &application{}
 		recorder := httptest.NewRecorder()
 
-		app.promptHandler(runner).ServeHTTP(
+		app.promptHandler(staticSessions(runner)).ServeHTTP(
 			recorder,
 			httptest.NewRequest("POST", "/prompt", strings.NewReader("\n  a question \n")),
 		)
@@ -192,7 +226,8 @@ var _ = Describe("promptHandler", func() {
 		app := &application{}
 		recorder := httptest.NewRecorder()
 
-		app.promptHandler(runner).ServeHTTP(recorder, httptest.NewRequest("GET", "/prompt", nil))
+		app.promptHandler(staticSessions(runner)).
+			ServeHTTP(recorder, httptest.NewRequest("GET", "/prompt", nil))
 
 		Expect(recorder.Code).To(Equal(405))
 		Expect(runner.calls).To(Equal(0))
@@ -203,7 +238,7 @@ var _ = Describe("promptHandler", func() {
 		app := &application{}
 		recorder := httptest.NewRecorder()
 
-		app.promptHandler(runner).ServeHTTP(
+		app.promptHandler(staticSessions(runner)).ServeHTTP(
 			recorder,
 			httptest.NewRequest("POST", "/prompt", strings.NewReader("   \n")),
 		)
@@ -219,7 +254,7 @@ var _ = Describe("promptHandler", func() {
 		app := &application{}
 		recorder := httptest.NewRecorder()
 
-		app.promptHandler(runner).ServeHTTP(
+		app.promptHandler(staticSessions(runner)).ServeHTTP(
 			recorder,
 			httptest.NewRequest("POST", "/prompt", strings.NewReader("a question")),
 		)
@@ -236,7 +271,7 @@ var _ = Describe("promptHandler", func() {
 		app := &application{}
 		recorder := httptest.NewRecorder()
 
-		app.promptHandler(runner).ServeHTTP(
+		app.promptHandler(staticSessions(runner)).ServeHTTP(
 			recorder,
 			httptest.NewRequest(
 				"POST",
@@ -255,7 +290,7 @@ var _ = Describe("promptHandler", func() {
 		// it — and the damage would surface later, as a resumed conversation that is
 		// subtly someone else's.
 		runner := &overlapRunner{release: make(chan struct{})}
-		handler := (&application{}).promptHandler(runner)
+		handler := (&application{}).promptHandler(staticSessions(runner))
 
 		first := make(chan struct{})
 		go func() {
@@ -284,5 +319,155 @@ var _ = Describe("promptHandler", func() {
 		<-first
 		<-second
 		Expect(runner.maxConcurrent()).To(Equal(1))
+	})
+
+	It("uses the default session when no session header is sent", func() {
+		// Backward compatibility is the point: a caller that sends no header is an
+		// existing caller, and it must land in the same conversation it always has.
+		var recorded []string
+		sessions := newSessionRunners(func(id string) pilib.Runner {
+			recorded = append(recorded, id)
+			return &fakeRunner{result: &pilib.Result{Result: "ok"}}
+		})
+		recorder := httptest.NewRecorder()
+
+		(&application{}).promptHandler(sessions).ServeHTTP(recorder, promptRequest("a question"))
+
+		Expect(recorder.Code).To(Equal(200))
+		Expect(recorded).To(Equal([]string{serviceSessionID}))
+		// Pinned as a literal: renaming the constant would silently orphan the
+		// conversation every existing caller is already in.
+		Expect(serviceSessionID).To(Equal("identity"))
+	})
+
+	It("passes the caller's session id to the runner", func() {
+		// Mixed case and both separators, because the contract is verbatim: any
+		// normalizing on the way through would fail this and should.
+		var recorded []string
+		sessions := newSessionRunners(func(id string) pilib.Runner {
+			recorded = append(recorded, id)
+			return &fakeRunner{result: &pilib.Result{Result: "ok"}}
+		})
+		recorder := httptest.NewRecorder()
+
+		(&application{}).promptHandler(sessions).
+			ServeHTTP(recorder, promptRequest("a question", "Session_A-1"))
+
+		Expect(recorder.Code).To(Equal(200))
+		Expect(recorded).To(Equal([]string{"Session_A-1"}))
+	})
+
+	It("rejects an invalid session id", func() {
+		// The id reaches the agent CLI as a command-line argument, so this is the
+		// boundary: a malformed id must be refused before the body is read and
+		// before any runner exists, or it reaches the agent process.
+		for _, value := range []string{
+			strings.Repeat("a", 65),
+			"session/a",
+			"session.a",
+			"",
+			"-dash",
+		} {
+			factoryCalls := 0
+			runner := &fakeRunner{result: &pilib.Result{Result: "unused"}}
+			sessions := newSessionRunners(func(string) pilib.Runner {
+				factoryCalls++
+				return runner
+			})
+			recorder := httptest.NewRecorder()
+
+			(&application{}).promptHandler(sessions).
+				ServeHTTP(recorder, promptRequest("a question", value))
+
+			Expect(recorder.Code).To(Equal(400), "session id %q", value)
+			Expect(factoryCalls).To(Equal(0), "session id %q", value)
+			Expect(runner.calls).To(Equal(0), "session id %q", value)
+		}
+	})
+
+	It("keeps two sessions apart", func() {
+		// Driven sequentially on purpose: memoryRunner's map is not mutex-guarded,
+		// so parallel drives would be a concurrent-map-write fatal rather than a
+		// meaningful assertion.
+		words := map[string]string{}
+		sessions := newSessionRunners(func(id string) pilib.Runner {
+			return &memoryRunner{sessionID: id, words: words}
+		})
+		handler := (&application{}).promptHandler(sessions)
+
+		remember := func(sessionID, word string) {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, promptRequest("remember the word "+word, sessionID))
+			Expect(recorder.Code).To(Equal(200), "session id %q", sessionID)
+		}
+		ask := func(sessionID string) string {
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, promptRequest("what is the word?", sessionID))
+			Expect(recorder.Code).To(Equal(200), "session id %q", sessionID)
+			return recorder.Body.String()
+		}
+
+		remember("session-a", "pelican")
+		remember("session-b", "walrus")
+
+		// If the handler ever handed the factory a constant instead of the caller's
+		// id, both sessions would write and read the same map key.
+		first := ask("session-a")
+		Expect(first).To(Equal("pelican"))
+		Expect(first).NotTo(ContainSubstring("walrus"))
+
+		second := ask("session-b")
+		Expect(second).To(Equal("walrus"))
+		Expect(second).NotTo(ContainSubstring("pelican"))
+	})
+
+	It("serves different sessions concurrently and serialises one session", func() {
+		// Different ids: two sessions never contend, so the second request reaches
+		// the runner while the first is still inside it.
+		runner := &overlapRunner{release: make(chan struct{})}
+		handler := (&application{}).promptHandler(staticSessions(runner))
+
+		first := make(chan struct{})
+		go func() {
+			defer close(first)
+			handler.ServeHTTP(httptest.NewRecorder(), promptRequest("one", "session-a"))
+		}()
+		Eventually(runner.entered).Should(Equal(1))
+
+		second := make(chan struct{})
+		go func() {
+			defer close(second)
+			handler.ServeHTTP(httptest.NewRecorder(), promptRequest("two", "session-b"))
+		}()
+		Eventually(runner.entered).Should(Equal(2))
+
+		close(runner.release)
+		<-first
+		<-second
+		Expect(runner.maxConcurrent()).To(Equal(2))
+
+		// One id: the per-session lock, not the runner, is what serializes, so the
+		// second request must not enter the runner until the first has left.
+		same := &overlapRunner{release: make(chan struct{})}
+		sameHandler := (&application{}).promptHandler(staticSessions(same))
+
+		third := make(chan struct{})
+		go func() {
+			defer close(third)
+			sameHandler.ServeHTTP(httptest.NewRecorder(), promptRequest("one", "session-c"))
+		}()
+		Eventually(same.entered).Should(Equal(1))
+
+		fourth := make(chan struct{})
+		go func() {
+			defer close(fourth)
+			sameHandler.ServeHTTP(httptest.NewRecorder(), promptRequest("two", "session-c"))
+		}()
+		Consistently(same.entered, 200*time.Millisecond).Should(Equal(1))
+
+		close(same.release)
+		<-third
+		<-fourth
+		Expect(same.maxConcurrent()).To(Equal(1))
 	})
 })
