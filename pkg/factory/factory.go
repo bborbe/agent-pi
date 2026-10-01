@@ -55,6 +55,27 @@ func CreatePiRunner(
 	})
 }
 
+// CreatePiSessionFactory builds the shared service's per-session factory over
+// the pi runner. The session id selects the conversation: pi.NewSessionFactory
+// derives PersistSession and SessionID from it, so this repository does not
+// repeat that derivation.
+func CreatePiSessionFactory(
+	agentDir string,
+	allowedTools string,
+	model string,
+	env map[string]string,
+) agentlib.SessionFactory {
+	return pilib.NewSessionFactory(
+		pilib.PiRunnerConfig{
+			AgentDir:     agentDir,
+			AllowedTools: allowedTools,
+			Model:        model,
+			Env:          env,
+		},
+		pilib.NewRunner,
+	)
+}
+
 // CreateFileResultDeliverer creates a ResultDeliverer that writes the agent's output back to a markdown file.
 func CreateFileResultDeliverer(filePath string) agentlib.ResultDeliverer {
 	return delivery.NewFileResultDeliverer(

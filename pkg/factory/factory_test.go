@@ -79,6 +79,19 @@ var _ = Describe("CreateAgentProvider", func() {
 	})
 })
 
+var _ = Describe("CreatePiSessionFactory", func() {
+	It("builds a session for a caller with an id and for one without", func() {
+		// The two ids are the two shapes this factory serves: a caller with an identity
+		// and the task-routed caller with none. The id-to-PersistSession/SessionID
+		// derivation is pi.NewSessionFactory's, so what is asserted here is that this
+		// wiring reaches it at all — construction only, which is why no runner runs.
+		sessions := factory.CreatePiSessionFactory("agent", "", "", map[string]string{})
+		Expect(sessions).NotTo(BeNil())
+		Expect(sessions.Create("session-a")).NotTo(BeNil())
+		Expect(sessions.Create("")).NotTo(BeNil())
+	})
+})
+
 var _ = Describe("AgentTypeService", func() {
 	It("pins the literal the executor stamps, so a rename cannot pass silently", func() {
 		// The executor owns this value (AgentTypeService in its CRD types package);

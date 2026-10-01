@@ -34,7 +34,7 @@ Requests on different session ids run at the same time. Requests on one session 
 
 A session id is an address, not a credential: the header does not isolate a caller from anyone else who can reach the endpoint, because the endpoint is unauthenticated. The service cannot list, rename, or delete sessions.
 
-The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and neither the prompt nor the session id is ever logged — only the prompt's length and a short digest.
+The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and the prompt content is never logged — only its length and a short digest. The session id does appear, and only in the per-turn `turn start id=<id>` / `turn end id=<id>` pair logged at `V(2)`, which is what makes per-session serialization visible from outside the process.
 
 ### Two conversations on one pod
 
