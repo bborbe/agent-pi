@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.5.1
 
 - refactor: run the interactive service mode on the shared implementation in `github.com/bborbe/agent` instead of this repository's own, so the frozen `:9090` contract has one implementation rather than one per interactive image. The router, the session cache, the per-session lock and the session-id validation move to the library's `interactive` package; what stays here is the wiring — `factory.CreatePiSessionFactory` hands it a pi-backed session factory, and `pi.NewSessionFactory` derives `PersistSession`/`SessionID` from the session id. Routes, status codes, the `X-Session-Id` header, the 1 MiB truncating body cap and the readiness body are unchanged, and a request that sends no session header still reaches the default conversation. Each turn is now bracketed by a `turn start id=<id>` / `turn end id=<id>` pair at `V(2)`, so per-session serialization is visible in the pod log; the prompt content is still never logged.
 
