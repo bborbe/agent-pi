@@ -14,15 +14,25 @@ New agents are created by swapping instructions (agent `AGENTS.md` guardrails) a
 
 ## Service Agents
 
-A Config with `spec.type: service` is a long-running identity rather than a task runner: the executor stamps `AGENT_TYPE=service`, and the binary then stays alive instead of running one task and exiting. It serves three endpoints on `LISTEN` (default `:9090`):
+A Config with `spec.type: service` is a long-running identity rather than a task runner: the executor stamps `AGENT_TYPE=service`, and the binary then stays alive instead of running one task and exiting. It serves these endpoints on `LISTEN` (default `:9090`):
 
-| Endpoint | Method | Purpose |
-|---|---|---|
-| `/readiness` | GET | 200 when the provider is reachable, 503 when it is not (or unparseable); skipped, and said to be skipped, when `PROVIDER_BASE_URL` is unset |
-| `/metrics` | GET | Prometheus registry |
-| `/prompt` | POST | Runs one prompt through the Pi runner and returns its answer as plain text |
+| Endpoint | Method | Auth | Purpose |
+|---|---|---|---|
+| `/readiness` | GET | public | 200 when the provider is reachable, 503 when it is not (or unparseable); skipped, and said to be skipped, when `PROVIDER_BASE_URL` is unset |
+| `/metrics` | GET | public | Prometheus registry |
+| `/.well-known/agent-card.json` | GET | public | The A2A Agent Card: the agent's name and the externally reachable A2A endpoint it advertises |
+| `/prompt` | POST | bearer | Runs one prompt through the Pi runner and returns its answer as plain text |
+| `/a2a` | POST | bearer | The A2A JSON-RPC binding; a managing session sends `SendMessage` here and holds one conversation by conversation id |
 
 `/prompt` is what makes the shape addressable, and it is the seam a chat transport would use. Its body is the prompt and its response is the runner's result; the handler itself persists nothing. Session continuity belongs to the runner, via `PiRunnerConfig.PersistSession`, which is on for a service agent and off for a task-routed one — a task-routed agent's runs are unrelated tasks sharing one volume, so resuming one task's conversation inside another would be a defect rather than a feature.
+
+### Authentication and the A2A surface
+
+Every gated route — `/prompt` and `/a2a` — requires `Authorization: Bearer <INTERACTIVE_AUTH_TOKEN>`. A request without it, or with the wrong token, is refused with `401` before its body is read and before any session is constructed. Only `/readiness`, `/metrics` and the Agent Card at `/.well-known/agent-card.json` stay unauthenticated: a kubelet probe and a Prometheus scrape cannot carry a token without writing it into the pod spec and the scrape configuration, and the card is public by design — it advertises the endpoint and the agent's name and carries no credential.
+
+The A2A surface lets a managing session discover this agent (through the card), authenticate to it, and hold a multi-turn conversation with it at `/a2a`, addressed by one conversation id it chooses up front. The protocol, the JSON-RPC binding, the session cache and the auth gate are implemented by `github.com/bborbe/agent/interactive`; this repository only configures them.
+
+A service agent must now set three variables — `INTERACTIVE_AUTH_TOKEN`, `A2A_PUBLIC_URL` and `A2A_AGENT_NAME` — and **a service agent that does not set them fails to start**. This is a breaking change for every existing service deployment: the shared service mounts the A2A routes unconditionally, and its zero auth refuses every gated route including `/prompt`, so leaving the token unset would not preserve the old unauthenticated intake — it would answer `401` everywhere. The other two are this repository's own gate rather than the library's — `validateServiceConfig` rejects them, while the library defaults the card's name to `interactive` and accepts an empty public URL. `A2A_PUBLIC_URL` must be an address a managing session can actually dial (not the bind address), and `A2A_AGENT_NAME` is the name the card advertises.
 
 ### Choosing a session
 
@@ -32,19 +42,20 @@ The accepted format is `[A-Za-z0-9_][A-Za-z0-9_-]{0,63}` — one to 64 character
 
 Requests on different session ids run at the same time. Requests on one session id are serialized — one turn at a time — because a session's transcript is a single store on the mounted volume, and two interleaved runs there would corrupt the continuity the session exists to keep.
 
-A session id is an address, not a credential: the header does not isolate a caller from anyone else who can reach the endpoint, because the endpoint is unauthenticated. The service cannot list, rename, or delete sessions.
+A session id is an address, not a credential: the header does not isolate a caller from anyone else who can reach the endpoint with the bearer token. The service cannot list, rename, or delete sessions.
 
-The endpoint is unauthenticated and reachable only from inside the namespace (there is no Ingress). The request body is bounded at 1 MiB, and the prompt content is never logged — only its length and a short digest. The session id does appear, and only in the per-turn `turn start id=<id>` / `turn end id=<id>` pair logged at `V(2)`, which is what makes per-session serialization visible from outside the process.
+The endpoint is reachable only from inside the namespace (there is no Ingress), and every gated route requires the bearer token above. The request body is bounded at 1 MiB, and the prompt content is never logged — only its length and a short digest. The session id does appear, and only in the per-turn `turn start id=<id>` / `turn end id=<id>` pair logged at `V(2)`, which is what makes per-session serialization visible from outside the process.
 
 ### Two conversations on one pod
 
 Four calls: give each session a different word, then ask each one back. They do not see each other.
 
 ```bash
-curl -s -X POST -H 'X-Session-Id: session-a' --data 'Remember this word: pelican. Reply with just: OK' http://localhost:9090/prompt
-curl -s -X POST -H 'X-Session-Id: session-b' --data 'Remember this word: walrus. Reply with just: OK' http://localhost:9090/prompt
-curl -s -X POST -H 'X-Session-Id: session-a' --data 'What word did I give you? Reply with just that word.' http://localhost:9090/prompt
-curl -s -X POST -H 'X-Session-Id: session-b' --data 'What word did I give you? Reply with just that word.' http://localhost:9090/prompt
+AUTH="Authorization: Bearer $INTERACTIVE_AUTH_TOKEN"
+curl -s -X POST -H "$AUTH" -H 'X-Session-Id: session-a' --data 'Remember this word: pelican. Reply with just: OK' http://localhost:9090/prompt
+curl -s -X POST -H "$AUTH" -H 'X-Session-Id: session-b' --data 'Remember this word: walrus. Reply with just: OK' http://localhost:9090/prompt
+curl -s -X POST -H "$AUTH" -H 'X-Session-Id: session-a' --data 'What word did I give you? Reply with just that word.' http://localhost:9090/prompt
+curl -s -X POST -H "$AUTH" -H 'X-Session-Id: session-b' --data 'What word did I give you? Reply with just that word.' http://localhost:9090/prompt
 ```
 
 The four answers come back `OK`, `OK`, `pelican`, `walrus` — `session-a` never sees `walrus`, and `session-b` never sees `pelican`. Drop the `-s` to see each response with its status code.
@@ -68,6 +79,9 @@ Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://p
 | `SENTRY_DSN` | no | — | Error reporting |
 | `PUSHGATEWAY_URL` | no | `http://pushgateway:9090` | Prometheus PushGateway URL |
 | `TASK_TYPE` | no | `unknown` | Task type label for metric grouping |
+| `INTERACTIVE_AUTH_TOKEN` | service agents | — | Bearer token every gated route requires; the shared service refuses every gated route (`/prompt` included) without it |
+| `A2A_PUBLIC_URL` | service agents | — | Externally reachable A2A endpoint the Agent Card advertises (not the bind address); required by this repository's own `validateServiceConfig` |
+| `A2A_AGENT_NAME` | service agents | — | Name the Agent Card advertises; required by this repository's own `validateServiceConfig` |
 
 Pi's own config (auth state, sessions) lives in `$HOME/.pi`. The K8s manifest mounts a PVC at `/home/pi/.pi`; locally pi resolves it from your home dir. There is no `CLAUDE_CONFIG_DIR` equivalent — pi does not have OAuth, it uses `MINIMAX_API_KEY`.
 
