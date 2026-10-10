@@ -32,7 +32,7 @@ Every gated route — `/prompt` and `/a2a` — requires `Authorization: Bearer <
 
 The A2A surface lets a managing session discover this agent (through the card), authenticate to it, and hold a multi-turn conversation with it at `/a2a`, addressed by one conversation id it chooses up front. The protocol, the JSON-RPC binding, the session cache and the auth gate are implemented by `github.com/bborbe/agent/interactive`; this repository only configures them.
 
-A service agent must now set three variables — `INTERACTIVE_AUTH_TOKEN`, `A2A_PUBLIC_URL` and `A2A_AGENT_NAME` — and **a service agent that does not set them fails to start**. This is a breaking change for every existing service deployment: the shared service mounts the A2A routes unconditionally, and its zero auth refuses every gated route including `/prompt`, so leaving the token unset would not preserve the old unauthenticated intake — it would answer `401` everywhere. `A2A_PUBLIC_URL` must be an address a managing session can actually dial (not the bind address), and `A2A_AGENT_NAME` is the name the card advertises.
+A service agent must now set three variables — `INTERACTIVE_AUTH_TOKEN`, `A2A_PUBLIC_URL` and `A2A_AGENT_NAME` — and **a service agent that does not set them fails to start**. This is a breaking change for every existing service deployment: the shared service mounts the A2A routes unconditionally, and its zero auth refuses every gated route including `/prompt`, so leaving the token unset would not preserve the old unauthenticated intake — it would answer `401` everywhere. The other two are this repository's own gate rather than the library's — `validateServiceConfig` rejects them, while the library defaults the card's name to `interactive` and accepts an empty public URL. `A2A_PUBLIC_URL` must be an address a managing session can actually dial (not the bind address), and `A2A_AGENT_NAME` is the name the card advertises.
 
 ### Choosing a session
 
@@ -79,6 +79,9 @@ Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://p
 | `SENTRY_DSN` | no | — | Error reporting |
 | `PUSHGATEWAY_URL` | no | `http://pushgateway:9090` | Prometheus PushGateway URL |
 | `TASK_TYPE` | no | `unknown` | Task type label for metric grouping |
+| `INTERACTIVE_AUTH_TOKEN` | service agents | — | Bearer token every gated route requires; the shared service refuses every gated route (`/prompt` included) without it |
+| `A2A_PUBLIC_URL` | service agents | — | Externally reachable A2A endpoint the Agent Card advertises (not the bind address); required by this repository's own `validateServiceConfig` |
+| `A2A_AGENT_NAME` | service agents | — | Name the Agent Card advertises; required by this repository's own `validateServiceConfig` |
 
 Pi's own config (auth state, sessions) lives in `$HOME/.pi`. The K8s manifest mounts a PVC at `/home/pi/.pi`; locally pi resolves it from your home dir. There is no `CLAUDE_CONFIG_DIR` equivalent — pi does not have OAuth, it uses `MINIMAX_API_KEY`.
 
