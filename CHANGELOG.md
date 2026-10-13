@@ -2,6 +2,9 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- fix: bump `osv-scanner` to v2.6.0 so the Linux vulnerability gates stop failing. v2.3.1 pins `golang.org/x/tools` v0.38.0, whose SSA builder aborts with `unexpected expr: *ast.KeyValueExpr` on the promoted-field composite-literal key Go 1.27 permits in the Linux stdlib, so a repo on the old pin passes locally on darwin and fails only in Linux CI. Where `golang.org/x/net` is older than v0.60.0 it is raised to v0.60.0, clearing `GO-2026-6603/6610/6611/6612/6617`, which fail both `vulncheck` and `trivy`.
 ## v0.6.0
 
 - feat: give a service agent an A2A surface — a public Agent Card at `/.well-known/agent-card.json` and a JSON-RPC `SendMessage` binding at `POST /a2a` — by bumping `github.com/bborbe/agent` to `v0.99.3`, which carries the shared `interactive` implementation, and wiring the three values it needs. A managing session can now discover the agent, authenticate to it and hold one multi-turn conversation with it by conversation id. Every gated route, `/prompt` included, now requires `Authorization: Bearer <INTERACTIVE_AUTH_TOKEN>`; only `/readiness`, `/metrics` and the Agent Card stay public. **Breaking change:** a service agent must now set `INTERACTIVE_AUTH_TOKEN`, `A2A_PUBLIC_URL` and `A2A_AGENT_NAME` and refuses to start without them. The token is required by the shared service — it mounts the A2A routes unconditionally and its zero auth refuses every gated route, so an unset token would not preserve the old unauthenticated `/prompt`, it would answer `401` everywhere — while `A2A_PUBLIC_URL` and `A2A_AGENT_NAME` are this repository's own gate (`validateServiceConfig`), because the library defaults the card's name to `interactive` and accepts an empty public URL. The task-running mode, its flags and its Kafka publishing are unchanged.
