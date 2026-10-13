@@ -46,8 +46,20 @@ lint:
 vet:
 	go vet -mod=mod $(shell go list -mod=mod ./... | grep -v /vendor/)
 
+# ANALYSER_TOOLCHAIN is the toolchain for the gates that type-check Go source through their
+# own bundled golang.org/x/tools. Those cannot read Go 1.27.2 export data: errcheck fails
+# with `internal error: package "embed" without types` (its newest release AND master,
+# checked 2026-10-10 against v1.20.1-0.20261009182218), and gosec with `cannot decode
+# "context", export data version 5 is greater than maximum supported version 4`. `go run
+# pkg@version` builds each tool with the INVOKING toolchain, so no pin can fix this — it is
+# upstream, with no available fix. golangci-lint is deliberately NOT in this set: v2.14.0
+# ships a newer x/tools and reads 1.27.2 fine. The rest of the gate stays on the project's
+# toolchain (1.27.2), which is what clears the stdlib net/http advisories 1.27.1 carries.
+# Drop this variable once the tools support Go 1.27.2.
+ANALYSER_TOOLCHAIN ?= go1.27.1
+
 errcheck:
-	GODEBUG=gotypesalias=1 go run github.com/kisielk/errcheck@$(ERRCHECK_VERSION) -ignore '(Close|Write|Fprint)' $(shell go list -mod=mod ./... | grep -v /vendor/ | grep -v k8s/client)
+	GOTOOLCHAIN=$(ANALYSER_TOOLCHAIN) GODEBUG=gotypesalias=1 go run github.com/kisielk/errcheck@$(ERRCHECK_VERSION) -ignore '(Close|Write|Fprint)' $(shell go list -mod=mod ./... | grep -v /vendor/ | grep -v k8s/client)
 
 VULNCHECK_IGNORE ?= GO-2026-4923 GO-2026-4514 GO-2022-0470 GO-2026-4772 GO-2026-4771 GO-2026-5932 GO-2026-6599 GO-2026-6600 GO-2026-6603 GO-2026-6604 GO-2026-6605 GO-2026-6607 GO-2026-6608 GO-2026-6609 GO-2026-6610 GO-2026-6611 GO-2026-6612 GO-2026-6613 GO-2026-6617
 
@@ -80,7 +92,7 @@ osv-scanner:
 	fi
 
 gosec:
-	go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -exclude=G104 ./...
+	GOTOOLCHAIN=$(ANALYSER_TOOLCHAIN) go run github.com/securego/gosec/v2/cmd/gosec@$(GOSEC_VERSION) -exclude=G104 ./...
 
 .PHONY: trivy
 trivy:

@@ -88,6 +88,26 @@ type application struct {
 	// anything else) is a task-routed job agent that must not. See factory.AgentTypeService.
 	AgentType string `required:"false" arg:"agent-type" env:"AGENT_TYPE" usage:"Agent shape: 'service' for a long-running identity agent; empty for a task-routed one"`
 
+	// InteractiveAuthToken is the bearer credential every gated route of a service
+	// agent requires. It is not optional in practice: the zero Auth refuses every
+	// gated request, so leaving it unset does not preserve an unauthenticated
+	// /prompt — it turns every gated route into a 401. The requirement is enforced
+	// in runService rather than by a required:"true" tag, which argument.Parse
+	// would evaluate for the task-routed jobs too. display:"length" is what makes
+	// the startup log report the field's length instead of the credential.
+	InteractiveAuthToken string `required:"false" arg:"interactive-auth-token" env:"INTERACTIVE_AUTH_TOKEN" usage:"Bearer token required by the interactive service's gated routes" display:"length"`
+
+	// A2APublicURL is the externally reachable A2A endpoint the Agent Card
+	// advertises verbatim. It is configured rather than derived from Listen because
+	// a card that advertised the bind address would name an address no managing
+	// session can dial.
+	A2APublicURL string `required:"false" arg:"a2a-public-url" env:"A2A_PUBLIC_URL" usage:"Externally reachable A2A endpoint URL the Agent Card advertises (service agents only)"`
+
+	// A2AAgentName is the name the Agent Card advertises for this agent, so a
+	// managing session that discovers the card knows which agent it is addressing
+	// rather than the library's generic default.
+	A2AAgentName string `required:"false" arg:"a2a-agent-name" env:"A2A_AGENT_NAME" usage:"Name the A2A Agent Card advertises for this agent (service agents only)"`
+
 	// Branch for Kafka result delivery.
 	Branch base.Branch `required:"false" arg:"branch" env:"BRANCH" usage:"branch"`
 
@@ -249,6 +269,45 @@ func (a *application) createDeliverer(
 	), closer, nil
 }
 
+// validateServiceConfig enforces the three values a service agent cannot serve
+// without. It is a method rather than a required:"true" struct tag because
+// argument.Parse evaluates required tags for every agent shape, so a tag would
+// also reject the task-routed jobs, which never serve HTTP. It is extracted from
+// runService so the failure paths can be tested without starting a server.
+func (a *application) validateServiceConfig(ctx context.Context) error {
+	if a.InteractiveAuthToken == "" {
+		return errors.Errorf(
+			ctx,
+			"INTERACTIVE_AUTH_TOKEN is required for a service agent; a service that cannot authenticate must not serve unauthenticated",
+		)
+	}
+	if a.A2APublicURL == "" {
+		return errors.Errorf(
+			ctx,
+			"A2A_PUBLIC_URL is required for a service agent; the Agent Card must advertise a real network endpoint",
+		)
+	}
+	if a.A2AAgentName == "" {
+		return errors.Errorf(
+			ctx,
+			"A2A_AGENT_NAME is required for a service agent; the Agent Card must name the deployed agent",
+		)
+	}
+	return nil
+}
+
+// cardConfig is what this service advertises in its A2A Agent Card. It exists as a
+// method so the two fields' mapping can be asserted directly: both are plain
+// strings, so swapping them still compiles, still passes every other spec, and
+// yields a card whose name is a URL and whose interface URL is a bare name — a
+// defect nothing else in this change would catch.
+func (a *application) cardConfig() interactive.CardConfig {
+	return interactive.CardConfig{
+		Name:      a.A2AAgentName,
+		PublicURL: a.A2APublicURL,
+	}
+}
+
 // runService is the long-running half of this binary. A service agent has no task
 // to run, so instead of executing one and exiting it stays alive and answers when
 // addressed — the shape the Config's `type: service` selects, and the reason a
@@ -257,8 +316,13 @@ func (a *application) runService(
 	ctx context.Context,
 	registry *prometheus.Registry,
 ) error {
+	if err := a.validateServiceConfig(ctx); err != nil {
+		return err
+	}
 	glog.V(2).Infof(
-		"agent-pi service mode: serving readiness, metrics and prompt intake on %s",
+		"agent-pi service mode: serving readiness, metrics, prompt intake and the A2A Agent Card (/.well-known/agent-card.json, agent %s, endpoint %s) on %s",
+		a.A2AAgentName,
+		a.A2APublicURL,
 		a.Listen,
 	)
 	// The session factory builds each session's runner on first use, so a session
@@ -267,7 +331,16 @@ func (a *application) runService(
 	// and is what lets an unseen session id start a fresh conversation without a
 	// registration step.
 	sessions := factory.CreatePiSessionFactory(a.AgentDir, a.AllowedTools, a.Model, a.piEnv())
-	svc := interactive.NewService(sessions, a.Listen, a.ProviderBaseURL, registry)
+	svc := interactive.NewService(
+		sessions,
+		a.Listen,
+		a.ProviderBaseURL,
+		registry,
+		interactive.NewAuthToken(a.InteractiveAuthToken),
+		a.cardConfig(),
+		interactive.DefaultSessionIdleTimeout,
+		interactive.DefaultMaxSessions,
+	)
 	return service.Run(
 		ctx,
 		func(ctx context.Context) error {
