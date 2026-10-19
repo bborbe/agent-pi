@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.6.2
 
 - test: Add Ginkgo suite for pkg/prompts asserting the assembled instructions carry workflow.md before output-format.md
 
