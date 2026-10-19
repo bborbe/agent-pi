@@ -1,6 +1,8 @@
 ---
-status: approved
+status: prompted
 approved: "2026-10-19T21:06:37Z"
+generating: "2026-10-19T21:19:35Z"
+prompted: "2026-10-19T21:22:30Z"
 branch: dark-factory/prompts-build-instructions-test
 ---
 
