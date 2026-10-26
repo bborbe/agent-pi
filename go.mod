@@ -30,7 +30,7 @@ require (
 	github.com/bborbe/math v1.4.16 // indirect
 	github.com/bborbe/metrics v0.6.8 // indirect
 	github.com/bborbe/parse v1.12.4 // indirect
-	github.com/bborbe/run v1.11.4 // indirect
+	github.com/bborbe/run v1.11.5 // indirect
 	github.com/bborbe/strimzi v1.8.22 // indirect
 	github.com/bborbe/validation v1.5.6 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
