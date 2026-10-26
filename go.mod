@@ -4,9 +4,9 @@ go 1.27.3
 
 require (
 	github.com/bborbe/agent v0.129.1
-	github.com/bborbe/cqrs v0.6.13
-	github.com/bborbe/errors v1.6.4
-	github.com/bborbe/kafka v1.29.0
+	github.com/bborbe/cqrs v0.6.14
+	github.com/bborbe/errors v1.6.5
+	github.com/bborbe/kafka v1.29.1
 	github.com/bborbe/sentry v1.10.6
 	github.com/bborbe/service v1.11.1
 	github.com/bborbe/time v1.27.18
@@ -30,7 +30,7 @@ require (
 	github.com/bborbe/math v1.4.16 // indirect
 	github.com/bborbe/metrics v0.6.8 // indirect
 	github.com/bborbe/parse v1.12.4 // indirect
-	github.com/bborbe/run v1.11.3 // indirect
+	github.com/bborbe/run v1.11.4 // indirect
 	github.com/bborbe/strimzi v1.8.22 // indirect
 	github.com/bborbe/validation v1.5.6 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
