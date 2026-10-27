@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.6.6
 
 - chore: update github.com/bborbe/agent to v0.131.0
 
