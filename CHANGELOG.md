@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- chore: update github.com/bborbe/agent to v0.131.0
+
 ## v0.6.5
 
 - chore: update github.com/bborbe/cqrs to v0.6.14, github.com/bborbe/errors to v1.6.5, github.com/bborbe/kafka to v1.29.1
