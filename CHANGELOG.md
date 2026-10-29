@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.6.7
 
 - chore: update github.com/bborbe/agent to v0.134.1, github.com/bborbe/cqrs to v0.6.15, github.com/bborbe/kafka to v1.29.2, github.com/bborbe/service to v1.11.2, github.com/bborbe/time to v1.27.19, github.com/bborbe/vault-cli to v0.184.0
 
