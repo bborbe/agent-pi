@@ -3,14 +3,14 @@ module github.com/bborbe/agent-pi
 go 1.27.3
 
 require (
-	github.com/bborbe/agent v0.134.1
+	github.com/bborbe/agent v0.135.0
 	github.com/bborbe/cqrs v0.6.15
 	github.com/bborbe/errors v1.6.5
-	github.com/bborbe/kafka v1.29.2
+	github.com/bborbe/kafka v1.29.10
 	github.com/bborbe/sentry v1.10.6
 	github.com/bborbe/service v1.11.2
-	github.com/bborbe/time v1.27.19
-	github.com/bborbe/vault-cli v0.184.0
+	github.com/bborbe/time v1.27.24
+	github.com/bborbe/vault-cli v0.184.2
 	github.com/golang/glog v1.2.5
 	github.com/onsi/ginkgo/v2 v2.33.1
 	github.com/onsi/gomega v1.44.0
@@ -24,13 +24,13 @@ require (
 	github.com/bborbe/argument/v2 v2.13.8 // indirect
 	github.com/bborbe/collection v1.21.4 // indirect
 	github.com/bborbe/http v1.26.32 // indirect
-	github.com/bborbe/k8s v1.14.24 // indirect
-	github.com/bborbe/kv v1.21.20 // indirect
+	github.com/bborbe/k8s v1.14.30 // indirect
+	github.com/bborbe/kv v1.21.27 // indirect
 	github.com/bborbe/log v1.7.5 // indirect
 	github.com/bborbe/math v1.4.16 // indirect
 	github.com/bborbe/metrics v0.6.8 // indirect
 	github.com/bborbe/parse v1.12.4 // indirect
-	github.com/bborbe/run v1.11.5 // indirect
+	github.com/bborbe/run v1.11.9 // indirect
 	github.com/bborbe/strimzi v1.8.23 // indirect
 	github.com/bborbe/validation v1.5.6 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
@@ -60,12 +60,12 @@ require (
 	github.com/jcmturner/rpc/v2 v2.0.3 // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/pandatix/go-abnf v0.5.1 // indirect
+	github.com/pandatix/go-abnf v0.5.3 // indirect
 	github.com/pierrec/lz4/v4 v4.1.33 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_model v0.6.3 // indirect
-	github.com/prometheus/common v0.73.0 // indirect
+	github.com/prometheus/common v0.73.1 // indirect
 	github.com/prometheus/procfs v0.23.0 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/robfig/cron/v3 v3.0.1 // indirect
