@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- feat: build the image inside a cluster via `make build BUILD_TARGET=<cluster>`
+
 ## v0.6.9
 
 - chore: update github.com/bborbe/agent to v0.136.0, github.com/bborbe/errors to v1.6.6, github.com/bborbe/sentry to v1.10.7, github.com/bborbe/time to v1.27.25, github.com/bborbe/vault-cli to v0.185.0
