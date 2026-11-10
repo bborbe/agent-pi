@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.7.2
 
 - chore: update github.com/bborbe/agent to v0.139.7, github.com/bborbe/kafka to v1.29.12, github.com/bborbe/time to v1.27.26, github.com/bborbe/vault-cli to v0.191.0, github.com/onsi/ginkgo/v2 to v2.34.0
 
