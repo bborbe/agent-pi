@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 - feat: `make build` resolves `BUILD_TARGET` from a bounded sun probe - sun when reachable, local docker as the fallback. An explicit `BUILD_TARGET` always wins, and the decision prints at parse time so it is visible under `make -n`
 
+## v0.7.2
+
+- chore: update github.com/bborbe/agent to v0.139.7, github.com/bborbe/kafka to v1.29.12, github.com/bborbe/time to v1.27.26, github.com/bborbe/vault-cli to v0.191.0, github.com/onsi/ginkgo/v2 to v2.34.0
+
 ## v0.7.1
 
 - chore: restate the do-not-merge contract in the gate workflow
