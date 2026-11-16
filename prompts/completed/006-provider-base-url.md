@@ -1,12 +1,12 @@
 ---
-status: committing
+status: completed
 summary: Added configurable provider endpoint settings, rendered a pi models.json catalogue from a shared package used by both entry points, with tests and docs
 execution_id: agent-pi-provider-endpoint-exec-006-provider-base-url
 dark-factory-version: v0.198.17
 created: "2026-11-16T18:30:00Z"
 queued: "2026-11-16T17:59:05Z"
 started: "2026-11-16T18:51:17Z"
-completed: "2026-11-16T18:59:06Z"
+completed: "2026-11-16T19:02:36Z"
 ---
 
 # Point the pi CLI at a configurable provider endpoint
