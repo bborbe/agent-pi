@@ -72,7 +72,11 @@ Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://p
 | `MODEL` | no | `MiniMax-M2.7-highspeed` | Model name passed to `pi --model` |
 | `ALLOWED_TOOLS` | no | — | Comma-separated pi tool allowlist (e.g. `Read,Grep,Bash`) |
 | `AGENT_DIR` | no | `agent` | Directory containing `AGENTS.md` guardrails (used as pi cwd) |
-| `PROVIDER_API_KEY` | no | — | MiniMax API key, threaded into the pi subprocess as `MINIMAX_API_KEY` |
+| `PROVIDER_API_KEY` | no | — | Provider credential, threaded into the pi subprocess under the name in `PROVIDER_KEY_ENV` |
+| `PROVIDER_KEY_ENV` | no | `MINIMAX_API_KEY` | Name of the environment variable pi receives the credential under |
+| `PROVIDER_BASE_URL` | no | — | Anthropic-Messages-compatible provider endpoint; a service agent dials it for readiness and the binary renders it into pi's `models.json` |
+| `PROVIDER_CONTEXT_WINDOW` | no | `128000` | Context window declared for the model in the pi catalogue |
+| `PROVIDER_MAX_TOKENS` | no | `32000` | Maximum output tokens declared for the model in the pi catalogue |
 | `ENV_CONTEXT` | no | — | Comma-separated `KEY=VAL` pairs injected into the prompt |
 | `PHASE` | no | `execution` | Agent phase: `planning` \| `execution` \| `ai_review` |
 | `KAFKA_BROKERS` | no | — | Required when `TASK_ID` is set |
@@ -83,7 +87,7 @@ Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://p
 | `A2A_PUBLIC_URL` | service agents | — | Externally reachable A2A endpoint the Agent Card advertises (not the bind address); required by this repository's own `validateServiceConfig` |
 | `A2A_AGENT_NAME` | service agents | — | Name the Agent Card advertises; required by this repository's own `validateServiceConfig` |
 
-Pi's own config (auth state, sessions) lives in `$HOME/.pi`. The K8s manifest mounts a PVC at `/home/pi/.pi`; locally pi resolves it from your home dir. There is no `CLAUDE_CONFIG_DIR` equivalent — pi does not have OAuth, it uses `MINIMAX_API_KEY`.
+Pi's own config (auth state, sessions) lives in `$HOME/.pi`. The K8s manifest mounts a PVC at `/home/pi/.pi`; locally pi resolves it from your home dir. There is no `CLAUDE_CONFIG_DIR` equivalent — pi does not have OAuth. The credential's variable name is configurable via `PROVIDER_KEY_ENV` (default `MINIMAX_API_KEY`), and a non-MiniMax endpoint is reached through a `models.json` the binary renders into `$HOME/.pi/agent` at startup from `PROVIDER_BASE_URL` and `MODEL`; with no base URL configured, no catalogue is written and pi's own default applies.
 
 ## Creating a New Agent
 
@@ -118,7 +122,7 @@ Prefer constrained `Bash(path:*)` forms over bare `Bash` to minimize shell attac
 
 ### Pi subprocess env allowlist
 
-`lib/pi/pi-runner.go` strips pod env down to a safe allowlist (`HOME,PATH,USER,TZ,…` plus known provider API keys: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MINIMAX_API_KEY`, `GEMINI_API_KEY`, `PROVIDER_API_KEY`, …) before spawning `pi`. Custom env vars beyond that list **must** be threaded explicitly via `PiRunnerConfig.Env map[string]string` in `main.go`. Don't expect arbitrary pod env to reach pi by default.
+`lib/pi/pi-runner.go` strips pod env down to a safe allowlist (`HOME,PATH,USER,TZ,…` plus known provider API keys: `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `MINIMAX_API_KEY`, `GEMINI_API_KEY`, `PROVIDER_API_KEY`, …) before spawning `pi`. Custom env vars beyond that list **must** be threaded explicitly via `PiRunnerConfig.Env map[string]string` in `main.go`. Don't expect arbitrary pod env to reach pi by default. The credential is threaded that way, under the name in `PROVIDER_KEY_ENV`; the allowlist's own `PROVIDER_API_KEY` entry is unrelated to this mechanism and does not carry the credential into pi.
 
 ## Local Quick Test
 
