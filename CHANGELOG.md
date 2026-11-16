@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.9.0
 
 - feat: point the agent at any Anthropic-Messages-compatible endpoint via `PROVIDER_BASE_URL`, rendering pi's `models.json` at startup; `PROVIDER_KEY_ENV` names the credential variable, and `PROVIDER_CONTEXT_WINDOW`/`PROVIDER_MAX_TOKENS` declare the model limits
 
