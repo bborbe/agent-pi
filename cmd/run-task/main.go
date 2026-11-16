@@ -158,7 +158,7 @@ func (a *application) writeProviderCatalogue(ctx context.Context) error {
 		)
 	}
 	agentDir := filepath.Join(home, ".pi", "agent")
-	if err := providercatalogue.Write(a.providerCatalogueSettings(), agentDir); err != nil {
+	if err := providercatalogue.Write(ctx, a.providerCatalogueSettings(), agentDir); err != nil {
 		return errors.Wrap(ctx, err, "write pi provider catalogue")
 	}
 	if a.ProviderBaseURL != "" {

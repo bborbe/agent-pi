@@ -18,6 +18,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -38,6 +39,36 @@ var _ = Describe("writeProviderCatalogue", func() {
 		err := (&application{}).writeProviderCatalogue(context.Background())
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("HOME"))
+	})
+
+	It("writes the catalogue under $HOME/.pi/agent before the runner is built", func() {
+		home, err := os.MkdirTemp("", "agent-pi-home")
+		Expect(err).NotTo(HaveOccurred())
+		previous, hadPrevious := os.LookupEnv("HOME")
+		Expect(os.Setenv("HOME", home)).To(Succeed())
+		DeferCleanup(func() {
+			if hadPrevious {
+				Expect(os.Setenv("HOME", previous)).To(Succeed())
+			} else {
+				Expect(os.Unsetenv("HOME")).To(Succeed())
+			}
+			Expect(os.RemoveAll(home)).To(Succeed())
+		})
+
+		app := &application{
+			ProviderBaseURL:       "http://router.example:8788",
+			ProviderKeyEnv:        "ROUTER_KEY",
+			Model:                 "deepseek-v4-flash-max[1m]",
+			ProviderContextWindow: 1048576,
+			ProviderMaxTokens:     64000,
+		}
+		Expect(app.writeProviderCatalogue(context.Background())).To(Succeed())
+
+		written, err := os.ReadFile(filepath.Join(home, ".pi", "agent", "models.json"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(written)).To(ContainSubstring(`"baseUrl": "http://router.example:8788"`))
+		Expect(string(written)).To(ContainSubstring(`"apiKey": "$ROUTER_KEY"`))
+		Expect(string(written)).To(ContainSubstring(`"contextWindow": 1048576`))
 	})
 })
 

@@ -68,7 +68,7 @@ type model struct {
 // written. contextWindow is declared explicitly because pi silently falls back
 // to 128000 when it is omitted, so a larger-window model would compact early
 // with no error.
-func Models(settings Settings) ([]byte, error) {
+func Models(ctx context.Context, settings Settings) ([]byte, error) {
 	if settings.ProviderBaseURL == "" {
 		return nil, nil
 	}
@@ -91,7 +91,7 @@ func Models(settings Settings) ([]byte, error) {
 		},
 	}, "", "  ")
 	if err != nil {
-		return nil, errors.Wrap(context.Background(), err, "marshal provider catalogue")
+		return nil, errors.Wrap(ctx, err, "marshal provider catalogue")
 	}
 	return data, nil
 }
@@ -102,20 +102,20 @@ func Models(settings Settings) ([]byte, error) {
 // existing models.json untouched: an unconfigured agent must keep behaving
 // exactly as it did before this package existed. The directory is created on
 // demand because the pi agent directory may not exist yet on a fresh volume.
-func Write(settings Settings, agentDir string) error {
-	data, err := Models(settings)
+func Write(ctx context.Context, settings Settings, agentDir string) error {
+	data, err := Models(ctx, settings)
 	if err != nil {
-		return errors.Wrap(context.Background(), err, "render provider catalogue")
+		return errors.Wrap(ctx, err, "render provider catalogue")
 	}
 	if data == nil {
 		return nil
 	}
 	if err := os.MkdirAll(agentDir, 0750); err != nil {
-		return errors.Wrapf(context.Background(), err, "create pi agent dir %s", agentDir)
+		return errors.Wrapf(ctx, err, "create pi agent dir %s", agentDir)
 	}
 	path := filepath.Join(agentDir, "models.json")
 	if err := os.WriteFile(path, data, 0600); err != nil {
-		return errors.Wrapf(context.Background(), err, "write %s", path)
+		return errors.Wrapf(ctx, err, "write %s", path)
 	}
 	return nil
 }

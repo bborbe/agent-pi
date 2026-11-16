@@ -5,6 +5,7 @@
 package providercatalogue_test
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -43,13 +44,13 @@ var configured = providercatalogue.Settings{
 
 var _ = Describe("Models", func() {
 	It("returns nothing when no base URL is configured", func() {
-		data, err := providercatalogue.Models(providercatalogue.Settings{Model: "ignored"})
+		data, err := providercatalogue.Models(context.Background(), providercatalogue.Settings{Model: "ignored"})
 		Expect(err).NotTo(HaveOccurred())
 		Expect(data).To(BeNil())
 	})
 
 	It("renders the provider, model limits and the credential variable name", func() {
-		data, err := providercatalogue.Models(configured)
+		data, err := providercatalogue.Models(context.Background(), configured)
 		Expect(err).NotTo(HaveOccurred())
 
 		var document catalogueDocument
@@ -83,18 +84,18 @@ var _ = Describe("Write", func() {
 	})
 
 	It("writes models.json with the bytes Models returns", func() {
-		Expect(providercatalogue.Write(configured, agentDir)).To(Succeed())
+		Expect(providercatalogue.Write(context.Background(), configured, agentDir)).To(Succeed())
 
 		written, err := os.ReadFile(filepath.Join(agentDir, "models.json"))
 		Expect(err).NotTo(HaveOccurred())
-		expected, err := providercatalogue.Models(configured)
+		expected, err := providercatalogue.Models(context.Background(), configured)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(written).To(Equal(expected))
 	})
 
 	It("creates the agent directory when it does not exist", func() {
 		nested := filepath.Join(agentDir, "missing", "agent")
-		Expect(providercatalogue.Write(configured, nested)).To(Succeed())
+		Expect(providercatalogue.Write(context.Background(), configured, nested)).To(Succeed())
 
 		_, err := os.Stat(filepath.Join(nested, "models.json"))
 		Expect(err).NotTo(HaveOccurred())
@@ -104,7 +105,7 @@ var _ = Describe("Write", func() {
 		blocked := filepath.Join(agentDir, "blocked")
 		Expect(os.WriteFile(blocked, []byte("not a directory"), 0600)).To(Succeed())
 
-		err := providercatalogue.Write(configured, filepath.Join(blocked, "agent"))
+		err := providercatalogue.Write(context.Background(), configured, filepath.Join(blocked, "agent"))
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("create pi agent dir"))
 	})
@@ -112,7 +113,7 @@ var _ = Describe("Write", func() {
 	It("fails when models.json cannot be written", func() {
 		Expect(os.Mkdir(filepath.Join(agentDir, "models.json"), 0750)).To(Succeed())
 
-		err := providercatalogue.Write(configured, agentDir)
+		err := providercatalogue.Write(context.Background(), configured, agentDir)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("write"))
 	})
@@ -121,7 +122,7 @@ var _ = Describe("Write", func() {
 		path := filepath.Join(agentDir, "models.json")
 		Expect(os.WriteFile(path, []byte("pre-existing"), 0600)).To(Succeed())
 
-		Expect(providercatalogue.Write(providercatalogue.Settings{}, agentDir)).To(Succeed())
+		Expect(providercatalogue.Write(context.Background(), providercatalogue.Settings{}, agentDir)).To(Succeed())
 
 		content, err := os.ReadFile(path)
 		Expect(err).NotTo(HaveOccurred())
