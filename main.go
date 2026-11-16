@@ -13,6 +13,7 @@ package main
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"time"
 
 	agentlib "github.com/bborbe/agent"
@@ -33,9 +34,16 @@ import (
 	"github.com/prometheus/client_golang/prometheus/push"
 
 	"github.com/bborbe/agent-pi/pkg/factory"
+	"github.com/bborbe/agent-pi/pkg/providercatalogue"
 )
 
 const agentName = "pi-agent"
+
+// defaultProviderKeyEnv is the variable name an unconfigured agent threads its
+// credential under. It is the fallback rather than the only value because
+// PROVIDER_KEY_ENV lets a fleet-wide endpoint change its key name without a
+// code change, while an agent that configures nothing keeps today's behaviour.
+const defaultProviderKeyEnv = "MINIMAX_API_KEY"
 
 func main() {
 	app := &application{}
@@ -66,19 +74,34 @@ type application struct {
 	// A task-routed agent runs one task and exits, so it never serves.
 	Listen string `required:"false" arg:"listen" env:"LISTEN" usage:"Address for readiness/metrics (service agents only)" default:":9090"`
 
-	// ProviderBaseURL is the provider endpoint the pi CLI talks to; it is passed
-	// through to the subprocess unchanged. A service agent also *dials* it for its
-	// readiness check, so pointing it at an unroutable address makes the pod report
-	// NotReady — which is what proves the probe tests provider reachability rather
-	// than mere process liveness. Empty means "the pi CLI's own default", and the
-	// check is skipped rather than guessed.
-	ProviderBaseURL string `required:"false" arg:"provider-base-url" env:"PROVIDER_BASE_URL" usage:"Provider endpoint; a service agent dials it for readiness"`
+	// ProviderBaseURL is the provider endpoint the pi CLI talks to. A service agent
+	// *dials* it for its readiness check, so pointing it at an unroutable address
+	// makes the pod report NotReady — which is what proves the probe tests provider
+	// reachability rather than mere process liveness. It is also rendered into the
+	// pi provider catalogue at startup, because pi has no base-URL environment
+	// variable. Empty means "the pi CLI's own default", no catalogue is written,
+	// and the readiness check is skipped rather than guessed.
+	ProviderBaseURL string `required:"false" arg:"provider-base-url" env:"PROVIDER_BASE_URL" usage:"Provider endpoint; dialled for readiness and rendered into the pi provider catalogue"`
 
 	// Environment context passed to prompt (comma-separated KEY=VALUE pairs)
 	EnvContextRaw string `required:"false" arg:"env-context" env:"ENV_CONTEXT" usage:"Comma-separated KEY=VALUE pairs for prompt context"`
 
 	// Provider routing.
-	ProviderAPIKey string `required:"false" arg:"provider-api-key" env:"PROVIDER_API_KEY" usage:"MiniMax API key passed to pi CLI as MINIMAX_API_KEY" display:"length"`
+	ProviderAPIKey string `required:"false" arg:"provider-api-key" env:"PROVIDER_API_KEY" usage:"Provider credential, threaded into the pi subprocess under the name in PROVIDER_KEY_ENV" display:"length"`
+
+	// ProviderKeyEnv is the name of the environment variable pi receives the
+	// credential under. It is a name, not a value: the credential itself stays in
+	// PROVIDER_API_KEY, and only this name is logged or rendered into models.json.
+	ProviderKeyEnv string `required:"false" arg:"provider-key-env" env:"PROVIDER_KEY_ENV" usage:"Name of the environment variable pi receives the provider credential under" default:"MINIMAX_API_KEY"`
+
+	// ProviderContextWindow is the context window declared for the model in the
+	// catalogue. pi defaults an omitted value to 128000, so a larger-window model
+	// would compact early with no error if this were left out.
+	ProviderContextWindow int `required:"false" arg:"provider-context-window" env:"PROVIDER_CONTEXT_WINDOW" usage:"Context window declared for the model in the pi provider catalogue" default:"128000"`
+
+	// ProviderMaxTokens is the maximum output tokens declared for the model in
+	// the catalogue.
+	ProviderMaxTokens int `required:"false" arg:"provider-max-tokens" env:"PROVIDER_MAX_TOKENS" usage:"Maximum output tokens declared for the model in the pi provider catalogue" default:"32000"`
 
 	// Model selection.
 	Model string `required:"false" arg:"model" env:"MODEL" usage:"Model name" default:"MiniMax-M2.7-highspeed"`
@@ -149,6 +172,15 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 
 	glog.V(2).Infof("agent-pi started phase=%s", a.Phase)
 
+	// The catalogue is written before the service/task branch so both shapes
+	// receive the same provider configuration: pi reads it from its agent
+	// directory, not from the process environment.
+	if err := a.writeProviderCatalogue(ctx); err != nil {
+		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
+		jobMetrics.RecordDuration(time.Since(start))
+		return err
+	}
+
 	deliverer, closeDeliverer, err := a.createDeliverer(ctx)
 	if err != nil {
 		jobMetrics.RecordRun(agentlib.AgentStatusFailed)
@@ -217,9 +249,64 @@ func (a *application) Run(ctx context.Context, _ libsentry.Client) error {
 func (a *application) piEnv() map[string]string {
 	piEnv := map[string]string{}
 	if a.ProviderAPIKey != "" {
-		piEnv["MINIMAX_API_KEY"] = a.ProviderAPIKey
+		keyEnv := a.providerKeyEnv()
+		piEnv[keyEnv] = a.ProviderAPIKey
+		glog.V(2).Infof("provider credential threaded to pi as %s", keyEnv)
 	}
 	return piEnv
+}
+
+// providerKeyEnv resolves the variable name pi receives the credential under.
+//
+// The fallback is mandatory rather than defensive: a struct literal built in a
+// test never passes through argument.Parse, so ProviderKeyEnv is empty there and
+// an unresolved name would hand pi an empty map key.
+func (a *application) providerKeyEnv() string {
+	if a.ProviderKeyEnv != "" {
+		return a.ProviderKeyEnv
+	}
+	return defaultProviderKeyEnv
+}
+
+// providerCatalogueSettings is the provider configuration rendered into pi's
+// models.json.
+func (a *application) providerCatalogueSettings() providercatalogue.Settings {
+	return providercatalogue.Settings{
+		ProviderBaseURL: a.ProviderBaseURL,
+		ProviderKeyEnv:  a.providerKeyEnv(),
+		Model:           a.Model,
+		ContextWindow:   a.ProviderContextWindow,
+		MaxTokens:       a.ProviderMaxTokens,
+	}
+}
+
+// writeProviderCatalogue renders pi's provider catalogue into the directory pi
+// actually resolves here, $HOME/.pi/agent.
+//
+// It must be that directory, not $PI_CODING_AGENT_DIR: the shared bborbe/agent
+// library does not forward PI_CODING_AGENT_DIR to the subprocess, while it does
+// forward HOME. A catalogue written to the other path would never be read, and
+// every test would still pass.
+func (a *application) writeProviderCatalogue(ctx context.Context) error {
+	home := os.Getenv("HOME")
+	if home == "" {
+		return errors.Errorf(
+			ctx,
+			"HOME must be set to locate the pi agent directory for models.json",
+		)
+	}
+	agentDir := filepath.Join(home, ".pi", "agent")
+	if err := providercatalogue.Write(ctx, a.providerCatalogueSettings(), agentDir); err != nil {
+		return errors.Wrap(ctx, err, "write pi provider catalogue")
+	}
+	if a.ProviderBaseURL != "" {
+		glog.V(2).Infof(
+			"wrote pi provider catalogue endpoint=%s model=%s",
+			a.ProviderBaseURL,
+			a.Model,
+		)
+	}
+	return nil
 }
 
 // createRunner builds the Pi runner this binary runs prompts with.

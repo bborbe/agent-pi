@@ -17,13 +17,73 @@ package main
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
 
+var _ = Describe("writeProviderCatalogue", func() {
+	It("fails rather than skipping silently when HOME is unset", func() {
+		previous, hadPrevious := os.LookupEnv("HOME")
+		Expect(os.Setenv("HOME", "")).To(Succeed())
+		DeferCleanup(func() {
+			if hadPrevious {
+				Expect(os.Setenv("HOME", previous)).To(Succeed())
+				return
+			}
+			Expect(os.Unsetenv("HOME")).To(Succeed())
+		})
+
+		err := (&application{}).writeProviderCatalogue(context.Background())
+		Expect(err).To(HaveOccurred())
+		Expect(err.Error()).To(ContainSubstring("HOME"))
+	})
+
+	It("writes the catalogue under $HOME/.pi/agent before the runner is built", func() {
+		home, err := os.MkdirTemp("", "agent-pi-home")
+		Expect(err).NotTo(HaveOccurred())
+		previous, hadPrevious := os.LookupEnv("HOME")
+		Expect(os.Setenv("HOME", home)).To(Succeed())
+		DeferCleanup(func() {
+			if hadPrevious {
+				Expect(os.Setenv("HOME", previous)).To(Succeed())
+			} else {
+				Expect(os.Unsetenv("HOME")).To(Succeed())
+			}
+			Expect(os.RemoveAll(home)).To(Succeed())
+		})
+
+		app := &application{
+			ProviderBaseURL:       "http://router.example:8788",
+			ProviderKeyEnv:        "ROUTER_KEY",
+			Model:                 "deepseek-v4-flash-max[1m]",
+			ProviderContextWindow: 1048576,
+			ProviderMaxTokens:     64000,
+		}
+		Expect(app.writeProviderCatalogue(context.Background())).To(Succeed())
+
+		written, err := os.ReadFile(filepath.Join(home, ".pi", "agent", "models.json"))
+		Expect(err).NotTo(HaveOccurred())
+		Expect(string(written)).To(ContainSubstring(`"baseUrl": "http://router.example:8788"`))
+		Expect(string(written)).To(ContainSubstring(`"apiKey": "$ROUTER_KEY"`))
+		Expect(string(written)).To(ContainSubstring(`"contextWindow": 1048576`))
+	})
+})
+
 var _ = Describe("piEnv", func() {
 	It("passes the provider key to the subprocess when it is configured", func() {
+		app := &application{ProviderAPIKey: "secret"}
+		Expect(app.piEnv()).To(Equal(map[string]string{"MINIMAX_API_KEY": "secret"}))
+	})
+
+	It("passes the provider key under the configured variable name", func() {
+		app := &application{ProviderAPIKey: "secret", ProviderKeyEnv: "ROUTER_KEY"}
+		Expect(app.piEnv()).To(Equal(map[string]string{"ROUTER_KEY": "secret"}))
+	})
+
+	It("falls back to MINIMAX_API_KEY when no variable name is configured", func() {
 		app := &application{ProviderAPIKey: "secret"}
 		Expect(app.piEnv()).To(Equal(map[string]string{"MINIMAX_API_KEY": "secret"}))
 	})
