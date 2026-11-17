@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.9.1
 
 - fix: send the provider credential as an `Authorization: Bearer $<PROVIDER_KEY_ENV>` header in the rendered pi catalogue so the in-cluster router, which strips `x-api-key`, authenticates instead of answering `401`
 
