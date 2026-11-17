@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- chore: run the cluster build's `vendor` init container on `golang:1.27.4`, matching `go.mod`, so sun builds stop failing at `go.mod requires go >= 1.27.4 (running go 1.27.3; GOTOOLCHAIN=local)`
+
 ## v0.9.1
 
 - fix: send the provider credential as an `Authorization: Bearer $<PROVIDER_KEY_ENV>` header in the rendered pi catalogue so the in-cluster router, which strips `x-api-key`, authenticates instead of answering `401`
