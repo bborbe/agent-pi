@@ -21,9 +21,10 @@ import (
 // test: the JSON is consumed by a third-party CLI whose parser is the contract.
 type catalogueDocument struct {
 	Providers map[string]struct {
-		BaseURL string `json:"baseUrl"`
-		API     string `json:"api"`
-		APIKey  string `json:"apiKey"`
+		BaseURL string            `json:"baseUrl"`
+		API     string            `json:"api"`
+		APIKey  string            `json:"apiKey"`
+		Headers map[string]string `json:"headers"`
 		Models  []struct {
 			ID            string   `json:"id"`
 			Reasoning     bool     `json:"reasoning"`
@@ -44,7 +45,10 @@ var configured = providercatalogue.Settings{
 
 var _ = Describe("Models", func() {
 	It("returns nothing when no base URL is configured", func() {
-		data, err := providercatalogue.Models(context.Background(), providercatalogue.Settings{Model: "ignored"})
+		data, err := providercatalogue.Models(
+			context.Background(),
+			providercatalogue.Settings{Model: "ignored"},
+		)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(data).To(BeNil())
 	})
@@ -68,6 +72,19 @@ var _ = Describe("Models", func() {
 		Expect(provider.Models[0].Input).To(Equal([]string{"text"}))
 		Expect(provider.Models[0].ContextWindow).To(Equal(configured.ContextWindow))
 		Expect(provider.Models[0].MaxTokens).To(Equal(configured.MaxTokens))
+	})
+
+	It("sends the credential as a bearer header", func() {
+		data, err := providercatalogue.Models(context.Background(), configured)
+		Expect(err).NotTo(HaveOccurred())
+
+		var document catalogueDocument
+		Expect(json.Unmarshal(data, &document)).To(Succeed())
+
+		provider, ok := document.Providers["custom"]
+		Expect(ok).To(BeTrue())
+		Expect(provider.Headers).To(HaveLen(1))
+		Expect(provider.Headers["Authorization"]).To(Equal("Bearer $ROUTER_KEY"))
 	})
 })
 
@@ -105,7 +122,11 @@ var _ = Describe("Write", func() {
 		blocked := filepath.Join(agentDir, "blocked")
 		Expect(os.WriteFile(blocked, []byte("not a directory"), 0600)).To(Succeed())
 
-		err := providercatalogue.Write(context.Background(), configured, filepath.Join(blocked, "agent"))
+		err := providercatalogue.Write(
+			context.Background(),
+			configured,
+			filepath.Join(blocked, "agent"),
+		)
 		Expect(err).To(HaveOccurred())
 		Expect(err.Error()).To(ContainSubstring("create pi agent dir"))
 	})
@@ -122,7 +143,9 @@ var _ = Describe("Write", func() {
 		path := filepath.Join(agentDir, "models.json")
 		Expect(os.WriteFile(path, []byte("pre-existing"), 0600)).To(Succeed())
 
-		Expect(providercatalogue.Write(context.Background(), providercatalogue.Settings{}, agentDir)).To(Succeed())
+		Expect(
+			providercatalogue.Write(context.Background(), providercatalogue.Settings{}, agentDir),
+		).To(Succeed())
 
 		content, err := os.ReadFile(path)
 		Expect(err).NotTo(HaveOccurred())

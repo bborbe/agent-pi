@@ -74,7 +74,7 @@ Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://p
 | `AGENT_DIR` | no | `agent` | Directory containing `AGENTS.md` guardrails (used as pi cwd) |
 | `PROVIDER_API_KEY` | no | — | Provider credential, threaded into the pi subprocess under the name in `PROVIDER_KEY_ENV` |
 | `PROVIDER_KEY_ENV` | no | `MINIMAX_API_KEY` | Name of the environment variable pi receives the credential under |
-| `PROVIDER_BASE_URL` | no | — | Anthropic-Messages-compatible provider endpoint; a service agent dials it for readiness and the binary renders it into pi's `models.json` |
+| `PROVIDER_BASE_URL` | no | — | Anthropic-Messages-compatible provider endpoint; a service agent dials it for readiness and the binary renders it into pi's `models.json` (with an `apiKey` reference and an `Authorization: Bearer $PROVIDER_KEY_ENV` header) |
 | `PROVIDER_CONTEXT_WINDOW` | no | `128000` | Context window declared for the model in the pi catalogue |
 | `PROVIDER_MAX_TOKENS` | no | `32000` | Maximum output tokens declared for the model in the pi catalogue |
 | `ENV_CONTEXT` | no | — | Comma-separated `KEY=VAL` pairs injected into the prompt |
@@ -87,7 +87,7 @@ Swap `localhost:9090` for whatever reaches the pod: in-cluster that is `http://p
 | `A2A_PUBLIC_URL` | service agents | — | Externally reachable A2A endpoint the Agent Card advertises (not the bind address); required by this repository's own `validateServiceConfig` |
 | `A2A_AGENT_NAME` | service agents | — | Name the Agent Card advertises; required by this repository's own `validateServiceConfig` |
 
-Pi's own config (auth state, sessions) lives in `$HOME/.pi`. The K8s manifest mounts a PVC at `/home/pi/.pi`; locally pi resolves it from your home dir. There is no `CLAUDE_CONFIG_DIR` equivalent — pi does not have OAuth. The credential's variable name is configurable via `PROVIDER_KEY_ENV` (default `MINIMAX_API_KEY`), and a non-MiniMax endpoint is reached through a `models.json` the binary renders into `$HOME/.pi/agent` at startup from `PROVIDER_BASE_URL` and `MODEL`; with no base URL configured, no catalogue is written and pi's own default applies. Note the caveat: an existing `models.json` is deliberately left untouched, so after unsetting `PROVIDER_BASE_URL` on an agent that previously set it, delete `$HOME/.pi/agent/models.json` or pi keeps resolving the old endpoint.
+Pi's own config (auth state, sessions) lives in `$HOME/.pi`. The K8s manifest mounts a PVC at `/home/pi/.pi`; locally pi resolves it from your home dir. There is no `CLAUDE_CONFIG_DIR` equivalent — pi does not have OAuth. The credential's variable name is configurable via `PROVIDER_KEY_ENV` (default `MINIMAX_API_KEY`), and a non-MiniMax endpoint is reached through a `models.json` the binary renders into `$HOME/.pi/agent` at startup from `PROVIDER_BASE_URL` and `MODEL`; with no base URL configured, no catalogue is written and pi's own default applies. That catalogue carries both an `apiKey` reference and an `Authorization: Bearer $<PROVIDER_KEY_ENV>` header: the in-cluster router strips `x-api-key` and forwards only a bearer, so without the header pi's request reaches the upstream with no credential and is answered `401`. Note the caveat: an existing `models.json` is deliberately left untouched, so after unsetting `PROVIDER_BASE_URL` on an agent that previously set it, delete `$HOME/.pi/agent/models.json` or pi keeps resolving the old endpoint.
 
 ## Creating a New Agent
 
