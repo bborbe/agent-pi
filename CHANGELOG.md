@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- fix: send the provider credential as an `Authorization: Bearer $<PROVIDER_KEY_ENV>` header in the rendered pi catalogue so the in-cluster router, which strips `x-api-key`, authenticates instead of answering `401`
+
 ## v0.9.0
 
 - feat: point the agent at any Anthropic-Messages-compatible endpoint via `PROVIDER_BASE_URL`, rendering pi's `models.json` at startup; `PROVIDER_KEY_ENV` names the credential variable, and `PROVIDER_CONTEXT_WINDOW`/`PROVIDER_MAX_TOKENS` declare the model limits

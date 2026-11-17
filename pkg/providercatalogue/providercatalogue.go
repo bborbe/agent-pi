@@ -47,10 +47,11 @@ type catalogue struct {
 }
 
 type provider struct {
-	BaseURL string  `json:"baseUrl"`
-	API     string  `json:"api"`
-	APIKey  string  `json:"apiKey"`
-	Models  []model `json:"models"`
+	BaseURL string            `json:"baseUrl"`
+	API     string            `json:"api"`
+	APIKey  string            `json:"apiKey"`
+	Headers map[string]string `json:"headers"`
+	Models  []model           `json:"models"`
 }
 
 type model struct {
@@ -78,6 +79,9 @@ func Models(ctx context.Context, settings Settings) ([]byte, error) {
 				BaseURL: settings.ProviderBaseURL,
 				API:     providerAPI,
 				APIKey:  "$" + settings.ProviderKeyEnv,
+				Headers: map[string]string{
+					"Authorization": "Bearer $" + settings.ProviderKeyEnv,
+				},
 				Models: []model{
 					{
 						ID:            settings.Model,
