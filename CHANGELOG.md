@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.9.2
 
 - chore: run the cluster build's `vendor` init container on `golang:1.27.4`, matching `go.mod`, so sun builds stop failing at `go.mod requires go >= 1.27.4 (running go 1.27.3; GOTOOLCHAIN=local)`
 
