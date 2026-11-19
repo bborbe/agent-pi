@@ -84,8 +84,18 @@ func Models(ctx context.Context, settings Settings) ([]byte, error) {
 				},
 				Models: []model{
 					{
-						ID:            settings.Model,
-						Reasoning:     true,
+						ID: settings.Model,
+						// Reasoning stays off deliberately. Advertised as true, the
+						// model spent its response on a `thinking` block and returned
+						// no text block at all, so the executor's JSON contract could
+						// never be met and the run failed with "no JSON result found in
+						// output" carrying the reasoning instead of an answer. Measured
+						// 2026-11-19 on dev: the reasoning block arrived truncated
+						// mid-word at ~128 tokens against a 64000 budget, with the
+						// router reporting `in=0 out=-` — so this is a model/response
+						// shape the runner cannot consume, not a budget the caller can
+						// raise.
+						Reasoning:     false,
 						Input:         []string{"text"},
 						ContextWindow: settings.ContextWindow,
 						MaxTokens:     settings.MaxTokens,
