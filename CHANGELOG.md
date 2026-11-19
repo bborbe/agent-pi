@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.9.3
 
 - chore: bump `github.com/bborbe/agent` `v0.141.0` → `v0.147.1` to pick up the `pi` runner's empty-result error carrying the stdout tail and stderr, so a run where pi exits 0 with nothing the parser recognises names its own evidence instead of reporting only `no result found in pi CLI output`
 
