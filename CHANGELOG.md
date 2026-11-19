@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- fix: scope the `scripts/` instruction in `agent/AGENTS.md` to tasks that need it. The file said "Scripts in `scripts/` are your API — use them, do not reimplement" with no condition, while its own Scope section forbids exploring beyond the task. With a weak model the unconditional line won: measured 2026-11-19 on dev `pi-headless`, 1 run in 5 still answered with `Let me check scripts perhaps? … But instructions say scripts in scripts/ are the API. Let me look quickly.` instead of the JSON result — 420 bytes, a complete response, `in=31 out=144`. It now says to use a script only when the task needs its I/O, to answer directly when none is needed, and that narrating an intent to look at `scripts/` is a failed run.
+
 ## v0.9.6
 
 - fix: forbid narration in the pi output contract. `output-format.md` required a JSON object but never said the JSON is the *whole* response, so a model could answer with a preamble — measured 2026-11-19 on dev `pi-headless`: `pi runner returned 100 bytes` and the executor failed with `no JSON result found in output: The task is to answer with the number four, and record job done. Let me look at scripts/ as the API.` The router logged `in=117 out=81`, a complete response and a single model call, so nothing was truncated — the model narrated a plan, emitted no tool call, and `pi` ended the turn. The contract now states that the JSON is the entire response, that a narrated plan is a failed run, and that a tool must be called rather than announced. Nothing in the prompt mentions `scripts/`; the model invented that plan.
