@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- fix: forbid narration in the pi output contract. `output-format.md` required a JSON object but never said the JSON is the *whole* response, so a model could answer with a preamble — measured 2026-11-19 on dev `pi-headless`: `pi runner returned 100 bytes` and the executor failed with `no JSON result found in output: The task is to answer with the number four, and record job done. Let me look at scripts/ as the API.` The router logged `in=117 out=81`, a complete response and a single model call, so nothing was truncated — the model narrated a plan, emitted no tool call, and `pi` ended the turn. The contract now states that the JSON is the entire response, that a narrated plan is a failed run, and that a tool must be called rather than announced. Nothing in the prompt mentions `scripts/`; the model invented that plan.
+
 ## v0.9.5
 
 - fix: stop advertising `reasoning: true` in the rendered pi provider catalogue. With it on, `deepseek-v4-flash-max` spent its response on a `thinking` block and returned no text block at all, so `agent-task-executor`'s JSON contract could never be met — the run failed with `no JSON result found in output` carrying truncated reasoning (`… I could inspect scripts directo`) instead of an answer. Measured 2026-11-19 on dev `pi-headless`: the thinking block arrived cut mid-word at ~128 tokens against a 64000 budget, with the router reporting `in=0 out=-`, so this is a response shape the runner cannot consume rather than a budget the caller can raise. The `pi` runner keeps its thinking-block fallback as a safety net; this stops the block being the only thing the model produces.
