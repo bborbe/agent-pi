@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- fix: stop advertising `reasoning: true` in the rendered pi provider catalogue. With it on, `deepseek-v4-flash-max` spent its response on a `thinking` block and returned no text block at all, so `agent-task-executor`'s JSON contract could never be met — the run failed with `no JSON result found in output` carrying truncated reasoning (`… I could inspect scripts directo`) instead of an answer. Measured 2026-11-19 on dev `pi-headless`: the thinking block arrived cut mid-word at ~128 tokens against a 64000 budget, with the router reporting `in=0 out=-`, so this is a response shape the runner cannot consume rather than a budget the caller can raise. The `pi` runner keeps its thinking-block fallback as a safety net; this stops the block being the only thing the model produces.
+
 ## v0.9.4
 
 - fix: bump `github.com/bborbe/agent` `v0.147.1` → `v0.147.2` so the pi runner reads the answer from a reasoning-only assistant message instead of returning `no result found in pi CLI output` on a prompt the model answered

@@ -68,7 +68,10 @@ var _ = Describe("Models", func() {
 		Expect(provider.APIKey).To(Equal("$ROUTER_KEY"))
 		Expect(provider.Models).To(HaveLen(1))
 		Expect(provider.Models[0].ID).To(Equal(configured.Model))
-		Expect(provider.Models[0].Reasoning).To(BeTrue())
+		// Reasoning stays off: advertised as true, the model answered entirely in a
+		// `thinking` block and the executor's JSON contract failed on a run that
+		// produced no text at all. See providercatalogue.go.
+		Expect(provider.Models[0].Reasoning).To(BeFalse())
 		Expect(provider.Models[0].Input).To(Equal([]string{"text"}))
 		Expect(provider.Models[0].ContextWindow).To(Equal(configured.ContextWindow))
 		Expect(provider.Models[0].MaxTokens).To(Equal(configured.MaxTokens))
