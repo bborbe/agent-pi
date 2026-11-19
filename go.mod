@@ -3,7 +3,7 @@ module github.com/bborbe/agent-pi
 go 1.27.4
 
 require (
-	github.com/bborbe/agent v0.147.1
+	github.com/bborbe/agent v0.147.2
 	github.com/bborbe/cqrs v0.6.15
 	github.com/bborbe/errors v1.6.6
 	github.com/bborbe/kafka v1.29.13
