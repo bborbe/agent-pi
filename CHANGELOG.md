@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.9.4
 
 - fix: bump `github.com/bborbe/agent` `v0.147.1` → `v0.147.2` so the pi runner reads the answer from a reasoning-only assistant message instead of returning `no result found in pi CLI output` on a prompt the model answered
 
