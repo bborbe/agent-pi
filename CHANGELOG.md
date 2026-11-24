@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+- chore: remove 21 stale vulnerability ignores (withdrawn advisory, module absent from go.mod, or version outside the affected range)
+- chore: install Trivy from a pinned release tarball in CI so the job no longer depends on the retired apt-key helper
+
 ## v0.9.7
 
 - fix: scope the `scripts/` instruction in `agent/AGENTS.md` to tasks that need it. The file said "Scripts in `scripts/` are your API — use them, do not reimplement" with no condition, while its own Scope section forbids exploring beyond the task. With a weak model the unconditional line won: measured 2026-11-19 on dev `pi-headless`, 1 run in 5 still answered with `Let me check scripts perhaps? … But instructions say scripts in scripts/ are the API. Let me look quickly.` instead of the JSON result — 420 bytes, a complete response, `in=31 out=144`. It now says to use a script only when the task needs its I/O, to answer directly when none is needed, and that narrating an intent to look at `scripts/` is a failed run.
