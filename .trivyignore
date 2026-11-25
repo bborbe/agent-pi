@@ -2,11 +2,5 @@
 CVE-2026-34040
 CVE-2026-33997
 
-# go.etcd.io/bbolt v1.4.3 dep, no fix available
-
-# github.com/blevesearch/bleve v1.0.14, no fix available (bleve v1 EOL)
-
-# aws-sdk-go-v2 s3/eventstream DoS, upgrade pending — BRO-20006
-
 # GO-2026-5932: no-fix advisory (unmaintained/deprecated package)
 GO-2026-5932
