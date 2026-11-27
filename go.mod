@@ -23,13 +23,13 @@ require (
 	github.com/a2aproject/a2a-go/v2 v2.9.0 // indirect
 	github.com/bborbe/argument/v2 v2.13.13 // indirect
 	github.com/bborbe/collection v1.21.9 // indirect
-	github.com/bborbe/http v1.28.0 // indirect
+	github.com/bborbe/http v1.28.1 // indirect
 	github.com/bborbe/k8s v1.16.2 // indirect
 	github.com/bborbe/kv v1.21.31 // indirect
 	github.com/bborbe/log v1.7.10 // indirect
 	github.com/bborbe/math v1.4.21 // indirect
 	github.com/bborbe/metrics v0.6.15 // indirect
-	github.com/bborbe/parse v1.12.8 // indirect
+	github.com/bborbe/parse v1.12.9 // indirect
 	github.com/bborbe/run v1.13.0 // indirect
 	github.com/bborbe/strimzi v1.9.1 // indirect
 	github.com/bborbe/validation v1.5.12 // indirect
