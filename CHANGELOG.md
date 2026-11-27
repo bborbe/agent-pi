@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## v0.9.10
 
 - chore: update github.com/bborbe/agent to v0.149.0, github.com/bborbe/cqrs to v0.6.18, github.com/bborbe/errors to v1.7.1, github.com/bborbe/kafka to v1.30.4, github.com/bborbe/sentry to v1.11.1, github.com/bborbe/service to v1.12.2, github.com/bborbe/time to v1.27.30, github.com/bborbe/vault-cli to v0.200.6
 
